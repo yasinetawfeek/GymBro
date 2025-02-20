@@ -25,4 +25,4 @@ COPY . /app/
 EXPOSE 8000
 
 # Start the application using Gunicorn
-CMD ["gunicorn", "DESD_Project.wsgi:application", "--bind", "0.0.0.0:8000"]
+CMD ["gunicorn", "backend.wsgi:application", "--bind", "0.0.0.0:8000"]
