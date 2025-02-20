@@ -1,18 +1,21 @@
-# Stage 1: Build the application using Node
+# Stage 1: Build the application using Node with pnpm
 FROM node:18-alpine as builder
+
+# Install pnpm globally
+RUN npm install -g pnpm
 
 # Set working directory
 WORKDIR /app
 
-# Copy package files and install dependencies
-COPY package.json package-lock.json ./
-RUN npm install
+# Copy package files and install dependencies using pnpm
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install
 
 # Copy the rest of the application code
 COPY . .
 
 # Build the app (make sure your package.json has a build script, e.g., "vite build")
-RUN npm run build
+RUN pnpm run build
 
 # Stage 2: Serve the app using Nginx
 FROM nginx:stable-alpine
