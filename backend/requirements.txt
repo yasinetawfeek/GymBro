@@ -1,0 +1,5 @@
+# Django framework
+Django>=4.2,<5.0
+
+# WSGI server for production
+gunicorn>=20.1.0,<21.0
