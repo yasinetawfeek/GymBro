@@ -8,8 +8,14 @@ import {
   LogOut, 
   Users,
   Sun,
-  Moon 
+  Moon,
+  AlertCircle
 } from 'lucide-react';
+
+import axios from 'axios';
+import { useNavigate } from "react-router-dom";
+
+const url = "http://localhost:8000/"
 
 const AuthPage = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -17,6 +23,10 @@ const AuthPage = () => {
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [generalError, setGeneralError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate;
 
   // Check system preference on initial load
   useEffect(() => {
@@ -33,14 +43,80 @@ const AuthPage = () => {
     }
   }, [isDarkMode]);
 
-  const handleSubmit = (e) => {
+  // Reset errors when switching between login and signup
+  useEffect(() => {
+    setErrors({});
+    setGeneralError('');
+  }, [isLogin]);
+
+const [shouldNavigate, setShouldNavigate] = useState(false);
+
+useEffect(() => {
+  if (shouldNavigate) navigate("/dashboard");
+}, [shouldNavigate, navigate]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Implement authentication logic here
-    console.log(isLogin ? 'Login' : 'Register', { email, password, username });
+    setErrors({});
+    setGeneralError('');
+    setIsLoading(true);
+  
+    try {
+      let data;
+      if (isLogin) {
+        data = { username, password };
+        const response = await axios.post(`${url}auth/jwt/create/`, data);
+        localStorage.setItem('access_token', response.data.access);
+        localStorage.setItem('refresh_token', response.data.refresh);
+        setShouldNavigate(true);
+      } else {
+        data = { email, username, password, re_password: password };
+        await axios.post(`${url}auth/users/`, data);
+        setIsLogin(true);
+        setGeneralError('Account created! Please log in.');
+      }
+    } catch (error) {
+      console.error(error);
+      console.error(error);
+
+      if (error.response) {
+        if (error.response.status === 401 || error.response.status === 400) {
+          setGeneralError('Incorrect username or password.');
+        } else if (error.response.data) {
+          setErrors(error.response.data);
+        } else {
+          setGeneralError('An error occurred. Please try again.');
+        }
+      } else {
+        setGeneralError('Network error. Please check your connection.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
+  };
+
+  // Helper function to render field errors
+  const renderFieldError = (fieldName) => {
+    if (!errors[fieldName]) return null;
+    
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={`text-sm flex items-center mt-1 ${
+          isDarkMode ? 'text-red-400' : 'text-red-600'
+        }`}
+      >
+        <AlertCircle className="w-4 h-4 mr-1" />
+        {Array.isArray(errors[fieldName]) 
+          ? errors[fieldName][0] 
+          : errors[fieldName]}
+      </motion.div>
+    );
   };
 
   return (
@@ -84,8 +160,59 @@ const AuthPage = () => {
             </h1>
           </div>
 
+          {/* General Error Message */}
+          {generalError && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`p-3 mb-4 rounded-lg flex items-center ${
+                isDarkMode 
+                ? (generalError.includes('successfully') 
+                  ? 'bg-green-900 text-green-200' 
+                  : 'bg-red-900 text-red-200')
+                : (generalError.includes('successfully') 
+                  ? 'bg-green-100 text-green-800 border border-green-200' 
+                  : 'bg-red-100 text-red-800 border border-red-200')
+              }`}
+            >
+              <AlertCircle className="w-5 h-5 mr-2" />
+              <span>{generalError}</span>
+            </motion.div>
+          )}
+
           {/* Auth Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Username field (shown for registration and login) */}
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="relative"
+            >
+              <label className={`block mb-2 flex items-center ${
+                isDarkMode ? 'text-gray-300' : 'text-gray-700'
+              }`}>
+                <User className={`w-5 h-5 mr-2 ${
+                  isDarkMode ? 'text-purple-400' : 'text-indigo-500'
+                }`} />
+                Username
+              </label>
+              <input 
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className={`w-full px-4 py-2 rounded-lg focus:outline-none focus:ring-2 ${
+                  isDarkMode 
+                    ? 'bg-gray-700 text-gray-100 border border-gray-600 focus:ring-purple-500' 
+                    : 'bg-white text-gray-900 border border-gray-300 focus:ring-indigo-500'
+                } ${errors.username ? (isDarkMode ? 'border-red-500' : 'border-red-600') : ''}`}
+                placeholder="Enter your username"
+                required
+              />
+              {renderFieldError('username')}
+            </motion.div>
+
+            {/* Email field (only shown for registration) */}
             {!isLogin && (
               <motion.div
                 initial={{ opacity: 0, y: -20 }}
@@ -96,49 +223,28 @@ const AuthPage = () => {
                 <label className={`block mb-2 flex items-center ${
                   isDarkMode ? 'text-gray-300' : 'text-gray-700'
                 }`}>
-                  <User className={`w-5 h-5 mr-2 ${
+                  <AtSign className={`w-5 h-5 mr-2 ${
                     isDarkMode ? 'text-purple-400' : 'text-indigo-500'
                   }`} />
-                  Username
+                  Email
                 </label>
                 <input 
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className={`w-full px-4 py-2 rounded-lg focus:outline-none focus:ring-2 ${
                     isDarkMode 
-                      ? 'bg-gray-700 text-gray-100 border-gray-600 focus:ring-purple-500' 
-                      : 'bg-white text-gray-900 border-gray-300 focus:ring-indigo-500'
-                  }`}
-                  placeholder="Choose a username"
+                      ? 'bg-gray-700 text-gray-100 border border-gray-600 focus:ring-purple-500' 
+                      : 'bg-white text-gray-900 border border-gray-300 focus:ring-indigo-500'
+                  } ${errors.email ? (isDarkMode ? 'border-red-500' : 'border-red-600') : ''}`}
+                  placeholder="Enter your email"
                   required={!isLogin}
                 />
+                {renderFieldError('email')}
               </motion.div>
             )}
 
-            <div className="relative">
-              <label className={`block mb-2 flex items-center ${
-                isDarkMode ? 'text-gray-300' : 'text-gray-700'
-              }`}>
-                <AtSign className={`w-5 h-5 mr-2 ${
-                  isDarkMode ? 'text-purple-400' : 'text-indigo-500'
-                }`} />
-                Email
-              </label>
-              <input 
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={`w-full px-4 py-2 rounded-lg focus:outline-none focus:ring-2 ${
-                  isDarkMode 
-                    ? 'bg-gray-700 text-gray-100 border-gray-600 focus:ring-purple-500' 
-                    : 'bg-white text-gray-900 border-gray-300 focus:ring-indigo-500'
-                }`}
-                placeholder="Enter your email"
-                required
-              />
-            </div>
-
+            {/* Password field */}
             <div className="relative">
               <label className={`block mb-2 flex items-center ${
                 isDarkMode ? 'text-gray-300' : 'text-gray-700'
@@ -154,26 +260,47 @@ const AuthPage = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 className={`w-full px-4 py-2 rounded-lg focus:outline-none focus:ring-2 ${
                   isDarkMode 
-                    ? 'bg-gray-700 text-gray-100 border-gray-600 focus:ring-purple-500' 
-                    : 'bg-white text-gray-900 border-gray-300 focus:ring-indigo-500'
-                }`}
+                    ? 'bg-gray-700 text-gray-100 border border-gray-600 focus:ring-purple-500' 
+                    : 'bg-white text-gray-900 border border-gray-300 focus:ring-indigo-500'
+                } ${errors.password ? (isDarkMode ? 'border-red-500' : 'border-red-600') : ''}`}
                 placeholder="Enter your password"
                 required
               />
+              {renderFieldError('password')}
+              {errors.non_field_errors && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`text-sm flex items-center mt-1 ${
+                    isDarkMode ? 'text-red-400' : 'text-red-600'
+                  }`}
+                >
+                  <AlertCircle className="w-4 h-4 mr-1" />
+                  {Array.isArray(errors.non_field_errors) 
+                    ? errors.non_field_errors[0] 
+                    : errors.non_field_errors}
+                </motion.div>
+              )}
             </div>
 
+            {/* Submit button */}
             <motion.button
-              whileHover={{ scale: 1.05 }}
+              whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.95 }}
               type="submit"
+              disabled={isLoading}
               className={`w-full py-3 rounded-lg transition-colors flex items-center justify-center ${
                 isDarkMode
-                  ? 'bg-purple-600 text-white hover:bg-purple-700'
-                  : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  ? isLoading 
+                    ? 'bg-purple-800 text-white cursor-not-allowed' 
+                    : 'bg-purple-600 text-white hover:bg-purple-700'
+                  : isLoading 
+                    ? 'bg-indigo-400 text-white cursor-not-allowed'
+                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
               }`}
             >
-              {isLogin ? 'Log In' : 'Sign Up'}
-              {isLogin ? <LogIn className="ml-2" /> : <Users className="ml-2" />}
+              {isLoading ? 'Processing...' : (isLogin ? 'Log In' : 'Sign Up')}
+              {!isLoading && (isLogin ? <LogIn className="ml-2" /> : <Users className="ml-2" />)}
             </motion.button>
           </form>
 
@@ -183,9 +310,10 @@ const AuthPage = () => {
               onClick={() => setIsLogin(!isLogin)}
               className={`hover:underline ${
                 isDarkMode 
-                  ? 'text-purple-400 hover:text-purple-300 bg-gray-800' 
-                  : 'text-blue-600 hover:text-blue-500 bg-white'
+                  ? 'text-purple-400 hover:text-purple-300' 
+                  : 'text-blue-600 hover:text-blue-500'
                 }`}
+              disabled={isLoading}
             >
               {isLogin 
                 ? 'Need an account? Sign Up' 
