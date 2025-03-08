@@ -5,3 +5,6 @@ from .serializers import *
 from .models import User
 
 
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserCreateSerializer
