@@ -92,7 +92,7 @@ const AccountManagement = () => {
   };
 
   const renderProfileSection = (title, data, icons) => (
-    <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/5 p-4">
+    <div className="bg-gray-700 backdrop-blur-sm rounded-lg p-4">
       <h3 className="text-sm text-purple-400/60 uppercase tracking-wider mb-4">{title}</h3>
       <div className="grid grid-cols-2 gap-4">
         {Object.entries(data).map(([key, value]) => (
@@ -142,7 +142,7 @@ const AccountManagement = () => {
           <motion.div
             key={key}
             whileHover={{ scale: 1.02 }}
-            className="bg-white/5 backdrop-blur-sm p-4 rounded-xl border border-white/5"
+            className="bg-gray-700 backdrop-blur-sm p-4 rounded-lg"
           >
             <div className="flex items-center space-x-2 mb-2">
               {key === 'monthlyWorkouts' && <Calendar className="w-4 h-4 text-purple-400" />}
@@ -158,7 +158,7 @@ const AccountManagement = () => {
         ))}
       </div>
 
-      <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/5 overflow-hidden">
+      <div className="bg-gray-700 backdrop-blur-sm rounded-lg overflow-hidden">
         <div className="p-4">
           <h3 className="text-lg font-light mb-4">Recent Activity</h3>
           <div className="space-y-3">
