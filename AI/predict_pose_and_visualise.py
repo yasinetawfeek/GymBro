@@ -5,7 +5,7 @@ import cv2
 
 handler = MediaPipeHandler()
 
-image_path = "/Users/yasinetawfeek/Developer/DesD_AI_pathway/AI/image.png" #Change to whatever image you want
+image_path = "image.png" #Change to whatever image you want
 
 image = Image.open(image_path)
 vis = image.copy()
