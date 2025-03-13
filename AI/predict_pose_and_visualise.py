@@ -5,7 +5,7 @@ import cv2
 
 handler = MediaPipeHandler()
 
-image_path = "image.png" #Change to whatever image you want
+image_path = "data/image.png" #Change to whatever image you want
 
 image = Image.open(image_path)
 vis = image.copy()
@@ -20,7 +20,7 @@ pose_detection = handler.predict_pose_from_image(image_formated)
 
 new_image = handler.draw_landmarks_on_image(vis, detection)
 
-cv2.imwrite("pose_visualization.jpg", cv2.cvtColor(new_image, cv2.COLOR_RGB2BGR))
+cv2.imwrite("data/pose_visualization.jpg", cv2.cvtColor(new_image, cv2.COLOR_RGB2BGR))
 
 print(pose_detection)
 
