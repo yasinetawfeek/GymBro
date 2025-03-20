@@ -60,10 +60,23 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         group_name = validated_data.pop('group', None)
+        user_id = instance.id
+
         request = self.context.get('request')
+        user = User.objects.get(id=user_id)
+        role_name = user.groups.first().name
+        print("request.user.groups.first().name",request.user.groups.first().name,"rolename",role_name)
+        print(type(request.user.groups.first().name),type(role_name))
+        print(role_name==request.user.groups.first().name)
+        if role_name == request.user.groups.first().name:
+            raise serializers.ValidationError("You cannot modify a user who has same role/group as you")
+        
         if group_name is not None: 
             if request and  not request.user.is_staff: 
                 raise serializers.ValidationError("You do not have the permissions to change this users' role/group")
+            elif group_name == request.user.groups.first().name:
+                raise serializers.ValidationError("You cannot assign the user the same role as you")
+
             else:
                 instance.groups.clear()
                 group = Group.objects.get(name=group_name)

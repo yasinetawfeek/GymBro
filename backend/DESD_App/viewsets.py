@@ -6,6 +6,8 @@ from .models import User
 from rest_framework.permissions import IsAdminUser,IsAuthenticated
 from .permissions import IsOwner
 from rest_framework import generics
+from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied
 
 
 """
@@ -32,8 +34,33 @@ class AccountManagementViewSet(viewsets.ModelViewSet):
     This is for admin to view and manage all users.
     Admins can view, update, delete, create users.
     """
-    permission_classes = [IsAdminUser] #only the admin can access this view
+    permission_classes = [IsAuthenticated,IsAdminUser] #only the admin can access this view
     queryset = User.objects.all()
     serializer_class = UserCreateSerializer
-    http_method_names = ['get', 'put', 'patch','delete'] #explicitly not mentioning POST ,as it does not make sense for admin to create user
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        target_rolename = instance.groups.first().name
+        
+        current_rolename = request.user.groups.first().name
+        if target_rolename == current_rolename:
+            raise PermissionDenied("User cannot delete other users with the same role")
+            
+        return super().destroy(request, *args, **kwargs)
+
+class UserActiveCountViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated,IsAdminUser]
+    def list(self, request):
+        total_number_of_users = User.objects.count()
+        total_number_of_active_users = User.objects.filter(is_active=True).count()
+        total_number_of_inactive_users = User.objects.filter(is_active=False).count()
+        data = {
+            "total_number_of_users": total_number_of_users,
+            "total_number_of_active_users": total_number_of_active_users,
+            "total_number_of_inactive_users": total_number_of_inactive_users,
+        }
+
+        return Response(data)
+    
 
