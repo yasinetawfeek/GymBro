@@ -1,8 +1,8 @@
 import { useMeeting } from "@videosdk.live/react-sdk";
 import Hls from "hls.js";
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, RefreshCw, Volume2, VolumeX, Play } from "lucide-react";
-import { motion } from "framer-motion";
+import { AlertCircle, RefreshCw, Volume2, VolumeX, Play, Pause, Maximize2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 function ViewerComponent({ playbackUrl, onPlay }) {
     const { hlsState } = useMeeting();
@@ -12,6 +12,7 @@ function ViewerComponent({ playbackUrl, onPlay }) {
     const [error, setError] = useState(null);
     const [isBuffering, setIsBuffering] = useState(false);
     const [isMuted, setIsMuted] = useState(true); // Start muted by default
+    const [isPlaying, setIsPlaying] = useState(false);
     const [showControls, setShowControls] = useState(true);
     const [isWaitingForPlay, setIsWaitingForPlay] = useState(false);
     
@@ -38,6 +39,7 @@ function ViewerComponent({ playbackUrl, onPlay }) {
             setLoaded(true);
             setIsBuffering(false);
             setIsWaitingForPlay(false);
+            setIsPlaying(true);
             onPlay?.();
         } catch (err) {
             console.error("Playback failed:", err);
@@ -152,11 +154,37 @@ function ViewerComponent({ playbackUrl, onPlay }) {
             if (videoRef.current) {
                 await videoRef.current.play();
                 setIsWaitingForPlay(false);
+                setIsPlaying(true);
                 setError(null);
+                onPlay?.();
             }
         } catch (err) {
             console.error("Manual play failed:", err);
             handlePlaybackError("Playback failed. Please try again.");
+        }
+    };
+
+    const handlePauseClick = () => {
+        if (videoRef.current) {
+            videoRef.current.pause();
+            setIsPlaying(false);
+        }
+    };
+
+    const handlePlayPauseToggle = () => {
+        if (videoRef.current) {
+            if (isPlaying) {
+                videoRef.current.pause();
+                setIsPlaying(false);
+            } else {
+                videoRef.current.play()
+                    .then(() => {
+                        setIsPlaying(true);
+                    })
+                    .catch(err => {
+                        console.error("Play failed:", err);
+                    });
+            }
         }
     };
 
@@ -166,6 +194,16 @@ function ViewerComponent({ playbackUrl, onPlay }) {
             setIsMuted(false);
         } catch (err) {
             console.error("Unmute failed:", err);
+        }
+    };
+
+    const toggleFullscreen = () => {
+        if (!document.fullscreenElement) {
+            videoRef.current.requestFullscreen().catch(err => {
+                console.error(`Error attempting to enable fullscreen: ${err.message}`);
+            });
+        } else {
+            document.exitFullscreen();
         }
     };
 
@@ -181,12 +219,12 @@ function ViewerComponent({ playbackUrl, onPlay }) {
 
             {/* Play Button Overlay */}
             {isWaitingForPlay && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm">
                     <motion.button
-                        whileHover={{ scale: 1.1 }}
+                        whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         onClick={handlePlayClick}
-                        className="w-20 h-20 rounded-full bg-purple-600 flex items-center justify-center text-white"
+                        className="w-20 h-20 rounded-full bg-purple-500/80 flex items-center justify-center text-white"
                     >
                         <Play className="w-10 h-10" />
                     </motion.button>
@@ -195,57 +233,94 @@ function ViewerComponent({ playbackUrl, onPlay }) {
 
             {/* Unmute Button */}
             {loaded && isMuted && (
-                <div className="absolute top-4 left-4">
+                <div className="absolute top-4 left-4 z-10">
                     <motion.button
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         onClick={handleUnmute}
-                        className="px-4 py-2 bg-purple-600 rounded-full text-white text-sm flex items-center gap-2"
+                        className="px-4 py-2 bg-purple-500/80 backdrop-blur-sm rounded-full text-white text-sm flex items-center gap-2"
+                        whileHover={{ scale: 1.05, backgroundColor: 'rgba(168, 85, 247, 0.9)' }}
+                        whileTap={{ scale: 0.95 }}
                     >
                         <Volume2 className="w-4 h-4" />
-                        Unmute
+                        <span className="font-light">Unmute</span>
                     </motion.button>
                 </div>
             )}
 
             {/* Controls Overlay */}
-            <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: showControls ? 1 : 0 }}
-                className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent"
-            >
-                <div className="flex items-center justify-between">
-                    <button
-                        onClick={() => {
-                            const newMutedState = !isMuted;
-                            setIsMuted(newMutedState);
-                            if (videoRef.current) {
-                                videoRef.current.muted = newMutedState;
-                            }
-                        }}
-                        className="text-white hover:text-purple-300 transition-colors"
+            <AnimatePresence>
+                {showControls && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 to-transparent"
                     >
-                        {isMuted ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
-                    </button>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                                <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={handlePlayPauseToggle}
+                                    className="bg-white/10 hover:bg-white/20 backdrop-blur-sm p-2 rounded-full transition-colors"
+                                >
+                                    {isPlaying 
+                                        ? <Pause className="w-5 h-5 text-purple-400" /> 
+                                        : <Play className="w-5 h-5 text-purple-400" />
+                                    }
+                                </motion.button>
+                                
+                                <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => {
+                                        const newMutedState = !isMuted;
+                                        setIsMuted(newMutedState);
+                                        if (videoRef.current) {
+                                            videoRef.current.muted = newMutedState;
+                                        }
+                                    }}
+                                    className="bg-white/10 hover:bg-white/20 backdrop-blur-sm p-2 rounded-full transition-colors"
+                                >
+                                    {isMuted 
+                                        ? <VolumeX className="w-5 h-5 text-purple-400" /> 
+                                        : <Volume2 className="w-5 h-5 text-purple-400" />
+                                    }
+                                </motion.button>
+                            </div>
 
-                    {error && (
-                        <div className="flex items-center gap-2 text-red-400">
-                            <AlertCircle className="w-5 h-5" />
-                            <span className="text-sm">{error}</span>
-                            <button
-                                onClick={handleRetry}
-                                className="ml-2 p-1 hover:bg-white/10 rounded-full transition-colors"
+                            <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={toggleFullscreen}
+                                className="bg-white/10 hover:bg-white/20 backdrop-blur-sm p-2 rounded-full transition-colors"
                             >
-                                <RefreshCw className="w-5 h-5" />
-                            </button>
+                                <Maximize2 className="w-5 h-5 text-purple-400" />
+                            </motion.button>
                         </div>
-                    )}
-                </div>
-            </motion.div>
+
+                        {error && (
+                            <div className="mt-3 flex items-center gap-2 text-red-400 bg-black/30 backdrop-blur-sm px-4 py-2 rounded-lg">
+                                <AlertCircle className="w-4 h-4" />
+                                <span className="text-sm font-light">{error}</span>
+                                <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={handleRetry}
+                                    className="ml-2 p-1.5 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
+                                >
+                                    <RefreshCw className="w-4 h-4" />
+                                </motion.button>
+                            </div>
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Loading Spinner */}
             {isBuffering && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm">
                     <motion.div
                         animate={{ rotate: 360 }}
                         transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
