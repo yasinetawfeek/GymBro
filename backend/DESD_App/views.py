@@ -18,22 +18,32 @@ def stream_info(request):
 
 def get_token(request):
     try:
-        # Get API key from environment variables
+        # Get API key and secret from environment variables
         api_key = os.getenv('VIDEOSDK_API_KEY')
+        api_secret = os.getenv('VIDEOSDK_API_SECRET')
         
         if not api_key:
             return JsonResponse({"error": "API key not found in environment variables"}, status=500)
         
-        # Generate JWT token locally - this works for development
+        if not api_secret:
+            # For development purposes only - use a consistent secret for testing
+            # In production, this should be loaded from environment variables
+            api_secret = "ZaqXsw123EdcRfvBgt567" # This is just for development, replace with real secret
+            print("Warning: API secret not found in environment, using development fallback")
+        
+        # Generate JWT token according to VideoSDK requirements
         payload = {
-            'apikey': api_key,
-            'permissions': ['allow_join', 'allow_mod'],  # Add necessary permissions
+            'api_key': api_key,  # Changed from 'apikey' to 'api_key'
+            'permissions': ['allow_join', 'allow_mod'],
             'iat': int(time.time()),
             'exp': int(time.time()) + 86400  # Token expires in 1 day
         }
         
-        # Generate JWT token
-        token = jwt.encode(payload, "your-dummy-secret", algorithm='HS256')
+        # Generate JWT token with proper secret
+        token = jwt.encode(payload, api_secret, algorithm='HS256')
+        
+        # Debug output
+        print(f"Generated token for API key {api_key}: {token[:15]}...")
         
         return JsonResponse({'token': token})
         
