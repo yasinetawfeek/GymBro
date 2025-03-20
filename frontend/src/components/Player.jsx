@@ -11,7 +11,7 @@ function ViewerComponent({ playbackUrl, onPlay }) {
     const [loaded, setLoaded] = useState(false);
     const [error, setError] = useState(null);
     const [isBuffering, setIsBuffering] = useState(false);
-    const [isMuted, setIsMuted] = useState(false);
+    const [isMuted, setIsMuted] = useState(true); // Start muted by default
     const [showControls, setShowControls] = useState(true);
     const [isWaitingForPlay, setIsWaitingForPlay] = useState(false);
     
@@ -30,7 +30,11 @@ function ViewerComponent({ playbackUrl, onPlay }) {
         try {
             setIsBuffering(true);
             setError(null);
+
+            // Always try to play muted first
+            videoRef.current.muted = true;
             await videoRef.current.play();
+            
             setLoaded(true);
             setIsBuffering(false);
             setIsWaitingForPlay(false);
@@ -58,20 +62,16 @@ function ViewerComponent({ playbackUrl, onPlay }) {
                     maxBufferLength: 30,
                     liveSyncDuration: 10,
                     debug: false,
-                    startLevel: -1, // Auto quality selection
+                    startLevel: -1,
                 });
 
-                // Setup error handling
                 hls.on(Hls.Events.ERROR, (event, data) => {
-                    console.warn("HLS error:", data);
                     if (data.fatal) {
                         switch(data.type) {
                             case Hls.ErrorTypes.NETWORK_ERROR:
-                                console.log("Attempting to recover network error...");
                                 hls.startLoad();
                                 break;
                             case Hls.ErrorTypes.MEDIA_ERROR:
-                                console.log("Attempting to recover media error...");
                                 hls.recoverMediaError();
                                 break;
                             default:
@@ -84,8 +84,8 @@ function ViewerComponent({ playbackUrl, onPlay }) {
 
                 // Setup success handling
                 hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                    console.log("HLS manifest parsed successfully");
                     if (autoplay) {
+                        videoRef.current.muted = true; // Ensure muted for autoplay
                         startPlayback();
                     } else {
                         setIsBuffering(false);
@@ -94,19 +94,13 @@ function ViewerComponent({ playbackUrl, onPlay }) {
                 });
 
                 // Load the stream
-                await new Promise((resolve, reject) => {
-                    hls.loadSource(streamUrl);
-                    hls.attachMedia(videoRef.current);
-                    hls.on(Hls.Events.MANIFEST_PARSED, resolve);
-                    hls.on(Hls.Events.ERROR, (event, data) => {
-                        if (data.fatal) reject(data);
-                    });
-                });
-
+                hls.loadSource(streamUrl);
+                hls.attachMedia(videoRef.current);
                 setHlsInstance(hls);
+
             } else if (videoRef.current.canPlayType("application/vnd.apple.mpegurl")) {
-                // Native HLS support (Safari)
                 videoRef.current.src = streamUrl;
+                videoRef.current.muted = true; // Ensure muted for autoplay
                 if (autoplay) {
                     await startPlayback();
                 } else {
@@ -153,9 +147,25 @@ function ViewerComponent({ playbackUrl, onPlay }) {
         initializeHls(true);
     };
 
-    const handlePlayClick = () => {
-        if (isWaitingForPlay) {
-            startPlayback();
+    const handlePlayClick = async () => {
+        try {
+            if (videoRef.current) {
+                await videoRef.current.play();
+                setIsWaitingForPlay(false);
+                setError(null);
+            }
+        } catch (err) {
+            console.error("Manual play failed:", err);
+            handlePlaybackError("Playback failed. Please try again.");
+        }
+    };
+
+    const handleUnmute = async () => {
+        try {
+            videoRef.current.muted = false;
+            setIsMuted(false);
+        } catch (err) {
+            console.error("Unmute failed:", err);
         }
     };
 
@@ -165,6 +175,7 @@ function ViewerComponent({ playbackUrl, onPlay }) {
                 ref={videoRef}
                 className="w-full h-full"
                 playsInline
+                muted={isMuted}
                 controls={false}
             />
 
@@ -182,6 +193,21 @@ function ViewerComponent({ playbackUrl, onPlay }) {
                 </div>
             )}
 
+            {/* Unmute Button */}
+            {loaded && isMuted && (
+                <div className="absolute top-4 left-4">
+                    <motion.button
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        onClick={handleUnmute}
+                        className="px-4 py-2 bg-purple-600 rounded-full text-white text-sm flex items-center gap-2"
+                    >
+                        <Volume2 className="w-4 h-4" />
+                        Unmute
+                    </motion.button>
+                </div>
+            )}
+
             {/* Controls Overlay */}
             <motion.div
                 initial={{ opacity: 0 }}
@@ -191,9 +217,10 @@ function ViewerComponent({ playbackUrl, onPlay }) {
                 <div className="flex items-center justify-between">
                     <button
                         onClick={() => {
-                            setIsMuted(!isMuted);
+                            const newMutedState = !isMuted;
+                            setIsMuted(newMutedState);
                             if (videoRef.current) {
-                                videoRef.current.muted = !isMuted;
+                                videoRef.current.muted = newMutedState;
                             }
                         }}
                         className="text-white hover:text-purple-300 transition-colors"

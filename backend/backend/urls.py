@@ -17,13 +17,15 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path, include, re_path
+from django.http import JsonResponse
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from django.conf import settings
 from django.conf.urls.static import static
-from DESD_App.views import get_token, stream_info
+from DESD_App.viewsets import StreamViewSet
 
+# Create the Swagger schema view
 schema_view = get_schema_view(
    openapi.Info(
       title="DESD API",
@@ -35,14 +37,20 @@ schema_view = get_schema_view(
 )
 
 urlpatterns = [
+    # Admin panel
     path("admin/", admin.site.urls),
-    path("api/",include("DESD_App.urls")), #all of the url requests inside this app must start with /api/end_point name
-
-    path("auth/",include("djoser.urls")),  #provided by djoser for Authentication purposes automatically
-    path("auth/",include("djoser.urls.jwt")), #provided by djoser for Authentication purposes automatically especially for JWT authentication
-    path('stream-info/', stream_info, name='stream-info'),
-    path('get-token/', get_token, name='get-token'),
-
+    
+    # Our application APIs
+    path("api/", include("DESD_App.urls")),  # API endpoints with /api/ prefix
+    
+    # Authentication endpoints provided by djoser
+    path("auth/", include("djoser.urls")),
+    path("auth/", include("djoser.urls.jwt")),
+    
+    # All video streaming endpoints now use the /api/ prefix
+    # No more legacy endpoints
+    
+    # Swagger/OpenAPI documentation
     re_path(r'^swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     re_path(r'^swagger/$', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     re_path(r'^redoc/$', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),

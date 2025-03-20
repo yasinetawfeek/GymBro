@@ -24,10 +24,12 @@ function Meeting() {
     useEffect(() => {
         const loadData = async () => {
             try {
+                // Using the API endpoints
                 const [streamData, tokenData] = await Promise.all([
-                    fetchWithRetry("http://localhost:8000/stream-info/"),
-                    fetchWithRetry("http://localhost:8000/get-token/")
+                    fetchWithRetry("http://localhost:8000/api/stream-info/"),
+                    fetchWithRetry("http://localhost:8000/api/get-token/")
                 ]);
+                console.log("Successfully fetched stream data and token from API endpoints");
                 
                 setStreamInfo(streamData);
                 
