@@ -6,7 +6,6 @@ from .viewsets import *
 # Create a router for our viewsets
 router = DefaultRouter()
 
-# <<<<<<< yahia/DESD-40
 
 router = DefaultRouter()
 # router.register(r'users', UserViewSet.as_view(), basename='user')
@@ -20,16 +19,7 @@ urlpatterns = [
     path('get-token/', StreamViewSet.as_view({'get': 'get_token'}), name='get-token'),
      path('', include(router.urls)),
 ]
-# Define URL patterns
-# urlpatterns = [
-#     # Stream API endpoints
-#     path('stream-info/', StreamViewSet.as_view({'get': 'stream_info'}), name='stream-info'),
-#     path('get-token/', StreamViewSet.as_view({'get': 'get_token'}), name='get-token'),
-    
-#     # Add the router URLs
-#     path('', include(router.urls)),
-# >>>>>>> main
-# ]
+
 """
 3 CRUD endpoints for users
 
