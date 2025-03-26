@@ -15,6 +15,15 @@ services:
     ports:
       - "80:80"  
 
+  ai:
+    build:
+      context: ./AI  
+    ports:
+      - "8001:8001"  
+    depends_on:
+      - backend
+    environment:
+      - FLASK_ENV=development
 
   db:
     image: postgres:latest 

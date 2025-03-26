@@ -83,3 +83,8 @@ class UserCreateSerializer(serializers.ModelSerializer):
                 instance.groups.add(group)
 
         return super().update(instance, validated_data)
+    
+
+
+
+    

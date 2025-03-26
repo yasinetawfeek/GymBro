@@ -4,10 +4,11 @@ from rest_framework import viewsets
 from .serializers import *
 from .models import User
 from rest_framework.permissions import IsAdminUser,IsAuthenticated
-from .permissions import IsOwner
+from .permissions import IsOwner,IsMachineLearningExpert
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
+import requests
 
 
 """
@@ -64,3 +65,50 @@ class UserActiveCountViewSet(viewsets.ViewSet):
         return Response(data)
     
 
+
+"""
+Machine Learning ViewSets below for both training and predicting
+AI as service will run through python flask as API, this API will only be accessible through django
+viewSets only if user has been authenticated and his group has the permission to access these api views
+e.g. only Admin, AI Engineer can do that but customer shall only use AI model for prediction but not for
+training it or modifying it.
+
+"""
+FLASK_MACHINE_LEARNING_API_URL="http://10.167.143.148:8001/train_classify_workout"
+FLASK_MACHINE_LEARNING_API_PREDICT_URL="http://10.167.143.148:8001/predict_classify_workout"
+
+API_KEY = "job_hunting_ai_memory_leakage"
+
+class TrainWorkoutClassiferViewSet(viewsets.ViewSet):
+    """
+    ViewSet only accessable by Admin and AI Engineer
+    """
+    
+    permission_classes = [IsAuthenticated,IsMachineLearningExpert] 
+
+    def post(self, request):
+        user = request.user
+        permissions = user.get_all_permissions()
+        print("all permissions",permissions)
+        
+        headers ={
+            "X-API-KEY":API_KEY, 
+            "Content-Type": "application/json",
+        }
+        machine_learning_accuracy = requests.post(FLASK_MACHINE_LEARNING_API_URL, json=request.data, headers=headers)
+        return Response(machine_learning_accuracy.json(), status=machine_learning_accuracy.status_code)
+    
+
+class PredictWorkoutClassiferViewSet(viewsets.ViewSet):
+    """
+    ViewSet is accessed by anyone who has registered and has been authenticated
+    """
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+
+        headers ={
+            "X-API-KEY":API_KEY, 
+            "Content-Type": "application/json",
+        }
+        machine_learning_prediction = requests.post(FLASK_MACHINE_LEARNING_API_PREDICT_URL, json=request.data, headers=headers)
+        return Response(machine_learning_prediction.json(), status=machine_learning_prediction.status_code)
