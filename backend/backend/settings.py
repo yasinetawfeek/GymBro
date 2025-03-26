@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+import os
 
 load_dotenv()   # Load environment variables
 
@@ -48,7 +49,7 @@ INSTALLED_APPS = [
     "DESD_App",
     "corsheaders",
     "django_extensions",
-
+      "drf_yasg"
 ]
 
 REST_FRAMEWORK = {
@@ -95,6 +96,7 @@ CORS_ALLOW_HEADERS = [
     'x-csrftoken',
     'x-requested-with',
 ]
+CORS_EXPOSE_HEADERS = ['Authorization']
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -206,3 +208,6 @@ STATIC_URL = "static/"
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
