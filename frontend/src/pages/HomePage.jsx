@@ -16,13 +16,13 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from "./AuthContext";
-
-const { user } = useAuth();
+import { useAuth } from '../context/AuthContext';
 
 const Header = ({ isDarkMode,}) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  
+  const user = useAuth();
+  const navigate = useNavigate()
+
   return (
     <header className={`${ 
       isDarkMode 
@@ -45,16 +45,16 @@ const Header = ({ isDarkMode,}) => {
             
             { user ? (
                 <div>
-                  <button className="hidden md:block bg-indigo-500 hover:bg-indigo-800 text-white font-semibold py-2 px-6 rounded-full transition duration-300">
-                    Get Started
+                  <button onClick={()=>navigate("/dashboard")} className="hidden md:block bg-indigo-500 hover:bg-indigo-800 text-white font-semibold py-2 px-6 rounded-full transition duration-300">
+                    Dashboard
                   </button>
-                  <button className="hidden md:block bg-indigo-500 hover:bg-indigo-800 text-white font-semibold py-2 px-6 rounded-full transition duration-300">
-                    Get Started
+                  <button onClick={()=>navigate("/account")} className="hidden md:block bg-indigo-500 hover:bg-indigo-800 text-white font-semibold py-2 px-6 rounded-full transition duration-300">
+                    My Account
                   </button>
                 </div>
                 ) : (
-                  <button className="hidden md:block bg-indigo-500 hover:bg-indigo-800 text-white font-semibold py-2 px-6 rounded-full transition duration-300">
-                  Get Started
+                  <button onClick={()=>navigate("/auth")} className="hidden md:block bg-indigo-500 hover:bg-indigo-800 text-white font-semibold py-2 px-6 rounded-full transition duration-300">
+                  Log in
                 </button>
                 )}
 
@@ -84,15 +84,15 @@ const Header = ({ isDarkMode,}) => {
                 { user ? (
                 <div>
                 <button className="bg-indigo-500 hover:bg-indigo-800 text-white font-semibold py-2 px-6 rounded-full transition duration-300 w-full">
-                  Get Started
+                  My Account
                 </button>
                 <button className="bg-indigo-500 hover:bg-indigo-800 text-white font-semibold py-2 px-6 rounded-full transition duration-300 w-full">
-                Get Started
+                  Dashboard
                 </button>
                 </div>
                 ) : (
                 <button className="bg-indigo-500 hover:bg-indigo-800 text-white font-semibold py-2 px-6 rounded-full transition duration-300 w-full">
-                  Get Started
+                  Log in
                 </button> 
                 )}
               </div>
@@ -435,6 +435,7 @@ const Footer = ({ isDarkMode,}) => {
 
 const HomePage = () => {
   const navigate = useNavigate();
+
   const [isDarkMode, setIsDarkMode] = useState(false);
   
     // Check system preference on initial load
