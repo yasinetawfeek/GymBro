@@ -20,8 +20,10 @@ import { useAuth } from '../context/AuthContext';
 
 const Header = ({ isDarkMode,}) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const user = useAuth();
   const navigate = useNavigate()
+  const user = useAuth()
+  console.log('user:')
+  console.log(user)
 
   return (
     <header className={`${ 
@@ -43,14 +45,18 @@ const Header = ({ isDarkMode,}) => {
               <a href="#how-it-works" className={`${ isDarkMode? 'text-white hover:text-indigo-500' : 'text-gray-400 hover:text-indigo-500'} font-medium`}>How It Works</a>
             </div>
             
-            { user ? (
-                <div>
+            { user.user ? (
+                <div className='md:flex space-x-8'>
+                  <div>
                   <button onClick={()=>navigate("/dashboard")} className="hidden md:block bg-indigo-500 hover:bg-indigo-800 text-white font-semibold py-2 px-6 rounded-full transition duration-300">
                     Dashboard
                   </button>
+                  </div>
+                  <div>
                   <button onClick={()=>navigate("/account")} className="hidden md:block bg-indigo-500 hover:bg-indigo-800 text-white font-semibold py-2 px-6 rounded-full transition duration-300">
                     My Account
                   </button>
+                  </div>
                 </div>
                 ) : (
                   <button onClick={()=>navigate("/auth")} className="hidden md:block bg-indigo-500 hover:bg-indigo-800 text-white font-semibold py-2 px-6 rounded-full transition duration-300">
@@ -81,8 +87,8 @@ const Header = ({ isDarkMode,}) => {
               <div className="flex flex-col space-y-4">
                 <a href="#features" className={`${ isDarkMode? 'text-white hover:text-indigo-500' : 'text-gray-400 hover:text-indigo-500'} font-medium`}>Features</a>
                 <a href="#how-it-works" className={`${ isDarkMode? 'text-white hover:text-indigo-500' : 'text-gray-400 hover:text-indigo-500'} font-medium`}>How It Works</a>
-                { user ? (
-                <div>
+                { user.user ? (
+                <div className="flex flex-col space-y-4">
                 <button className="bg-indigo-500 hover:bg-indigo-800 text-white font-semibold py-2 px-6 rounded-full transition duration-300 w-full">
                   My Account
                 </button>
@@ -435,7 +441,6 @@ const Footer = ({ isDarkMode,}) => {
 
 const HomePage = () => {
   const navigate = useNavigate();
-
   const [isDarkMode, setIsDarkMode] = useState(false);
   
     // Check system preference on initial load
@@ -443,9 +448,7 @@ const HomePage = () => {
       const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
       setIsDarkMode(prefersDarkMode);
       
-      // Check if user is authenticated (has valid token)
-      const token = localStorage.getItem('access_token');
-      }, [navigate]);
+    }, [navigate]);
   
     // Update dark mode class on body
     useEffect(() => {
