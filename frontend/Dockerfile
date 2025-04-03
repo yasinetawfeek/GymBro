@@ -1,21 +1,21 @@
-# Stage 1: Build the application using Node with pnpm
-FROM node:18-alpine as builder
-
-# Install pnpm globally
-RUN npm install -g pnpm
+# Stage 1: Build the application using Node with npm
+FROM node:22-alpine as builder
 
 # Set working directory
 WORKDIR /app
 
-# Copy package files and install dependencies using pnpm
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install
+# Update npm to version 11.2.0 (as mentioned in the GitHub release)
+RUN npm install -g npm@11.2.0
+
+# Copy package files and install dependencies using npm with legacy-peer-deps flag
+COPY package.json package-lock.json ./
+RUN npm install --legacy-peer-deps
 
 # Copy the rest of the application code
 COPY . .
 
 # Build the app (make sure your package.json has a build script, e.g., "vite build")
-RUN pnpm run build
+RUN npm run build
 
 # Stage 2: Serve the app using Nginx
 FROM nginx:stable-alpine
@@ -25,6 +25,9 @@ RUN rm -rf /usr/share/nginx/html/*
 
 # Copy build output from builder stage to Nginx's html directory
 COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Copy nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Expose port 80
 EXPOSE 80
