@@ -7,7 +7,7 @@ import {
   Award
 } from 'lucide-react';
 
-import NavBar from '../components/NavBar';
+import NavBar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
 import ProfileOverview from '../components/ProfileOverview';
 import FitnessStats from '../components/FitnessStats';
