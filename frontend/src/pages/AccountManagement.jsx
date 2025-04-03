@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   UserCircle, Mail, MapPin, Calendar,
@@ -13,41 +13,14 @@ import ProfileOverview from '../components/ProfileOverview';
 import FitnessStats from '../components/FitnessStats';
 import UserManagement from '../components/UserManagement';
 import UserDetailsPage from '../components/UserDetailsPage';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const AccountManagement = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [userRole, setUserRole] = useState('admin'); // Default to admin view for demonstration
-  const [activePage, setActivePage] = useState('users'); // Default to user management for demonstration
   const [isEditing, setIsEditing] = useState(false);
-
-  const [userData, setUserData] = useState({
-    basicInfo: {
-      fullName: 'Alex Johnson',
-      email: 'alex@example.com',
-      location: 'New York, USA',
-      memberSince: 'March 2024'
-    },
-    fitnessProfile: {
-      height: '175 cm',
-      weight: '70 kg',
-      bodyFat: '15%',
-      fitnessLevel: 'Intermediate'
-    },
-    preferences: {
-      primaryGoal: 'Build Muscle',
-      workoutFrequency: '4x/week',
-      preferredTime: 'Morning',
-      focusAreas: 'Full Body'
-    },
-    achievements: {
-      workoutsCompleted: '48',
-      daysStreak: '15',
-      personalBests: '12',
-      points: '2,450'
-    }
-  });
-
-  const [fitnessStats] = useState({
+  const [activePage, setActivePage] = useState('profile');
+  const [fitnessStats, setFitnessStats] = useState({
     recentWorkouts: [
       { date: '2025-03-10', type: 'Upper Body', duration: '45 min', intensity: 'High' },
       { date: '2025-03-08', type: 'Lower Body', duration: '50 min', intensity: 'Medium' },
@@ -60,6 +33,40 @@ const AccountManagement = () => {
       streakDays: 15
     }
   });
+
+  // Get user data and functions from auth context
+  const { user, loading, updateProfile, error, logout } = useAuth();
+  const navigate = useNavigate();
+  
+  // If not authenticated, redirect to login page
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/auth');
+    }
+  }, [user, loading, navigate]);
+
+  // Determine user role from backend data
+  const getUserRole = () => {
+    if (!user) return 'user';
+    
+    // Check if the user has admin permissions
+    // This might need to be adjusted based on how roles are stored in your backend
+    if (user.basicInfo?.isAdmin || user.basicInfo?.role === 'Admin') {
+      return 'admin';
+    }
+    return 'user';
+  };
+  
+  const userRole = getUserRole();
+
+  // Set initial active page based on role
+  useEffect(() => {
+    if (userRole === 'admin') {
+      setActivePage('users');
+    } else {
+      setActivePage('profile');
+    }
+  }, [userRole]);
 
   const icons = {
     fullName: UserCircle,
@@ -80,24 +87,37 @@ const AccountManagement = () => {
     points: Medal
   };
 
-  // Toggle role for demonstration purposes
-  const toggleRole = () => {
-    if (userRole === 'admin') {
-      setUserRole('user');
-      setActivePage('profile');
-    } else {
-      setUserRole('admin');
-      setActivePage('users');
+  // Handle the save action when profile is edited
+  const handleProfileUpdate = async (updatedData) => {
+    try {
+      await updateProfile(updatedData);
+      setIsEditing(false);
+    } catch (err) {
+      console.error('Failed to update profile:', err);
     }
   };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/auth');
+  };
+
+  // Show loading spinner while user data is being fetched
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+      </div>
+    );
+  }
 
   const renderActivePage = () => {
     switch (activePage) {
       case 'profile':
         return (
           <ProfileOverview 
-            userData={userData}
-            setUserData={setUserData}
+            userData={user}
+            setUserData={handleProfileUpdate}
             isEditing={isEditing}
             setIsEditing={setIsEditing}
             icons={icons}
@@ -116,18 +136,14 @@ const AccountManagement = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
-      <NavBar isMenuOpen={isMenuOpen} setIsMenuOpen={setIsMenuOpen} />
+      <NavBar isMenuOpen={isMenuOpen} setIsMenuOpen={setIsMenuOpen} onLogout={handleLogout} />
 
       <div className="max-w-6xl mx-auto px-4 py-6 relative">
-        {/* For demonstration only - role switcher */}
-        <div className="mb-4 flex justify-end">
-          <button 
-            onClick={toggleRole}
-            className="text-xs bg-purple-500/20 px-3 py-1 rounded-full text-purple-300"
-          >
-            Currently: {userRole === 'admin' ? 'Admin View' : 'User View'}
-          </button>
-        </div>
+        {error && (
+          <div className="mb-4 bg-red-500/20 text-red-300 p-3 rounded-lg">
+            {error}
+          </div>
+        )}
 
         <div className="flex flex-col lg:flex-row gap-6">
           <Sidebar 

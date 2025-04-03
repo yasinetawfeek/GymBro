@@ -15,7 +15,7 @@ export default function App() {
     <AuthProvider>
       <Routes>
         <Route path="/" element={<Navigate to="/auth" replace />} />
-        <Route path='/settings' element={<AccountManagement />} />
+        <Route path='/settings' element={<ProtectedRoute><AccountManagement /></ProtectedRoute>} />
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/live" element={<ErrorBoundary><Meeting /></ErrorBoundary>} />

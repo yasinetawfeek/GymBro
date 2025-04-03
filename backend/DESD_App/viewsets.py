@@ -120,6 +120,10 @@ class UserViewSet(generics.RetrieveUpdateAPIView):
     #the reason why we do not set queryset to all objects, to prevent user from accessing other users' information
 
     def get_object(self):
+        # Print debugging information
+        print(f"Request user: {self.request.user}")
+        print(f"Request auth: {self.request.auth}")
+        print(f"Request headers: {self.request.headers}")
         return self.request.user  # Only user can access their information even if they pass a different id
 
 
