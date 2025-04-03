@@ -32,7 +32,7 @@ def train_model():
         if download_dataset(dataset_url):
             accuracy_workout=train_workout_classifier()
             accuracy_muscle_group=train_muscle_group_classifier()
-            result="""Training accuracy for Workout Classifier is {accuracy_workout} \n
+            result=f"""Training accuracy for Workout Classifier is {accuracy_workout} \n
             Training accuracy for Muscle Group Classifier is {accuracy_muscle_group} \n"""
         else:
             return jsonify({"status": "error", "message": "Failed to download or load dataset"}), 400

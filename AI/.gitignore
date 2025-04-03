@@ -34,6 +34,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+ai_venv/
 
 # IDEs and editors
 .idea/
