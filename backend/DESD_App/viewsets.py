@@ -2,7 +2,6 @@ from rest_framework.generics import CreateAPIView
 from django.contrib.auth.models import User
 from rest_framework import viewsets
 from .serializers import *
-from .models import User
 from rest_framework.permissions import IsAdminUser,IsAuthenticated
 from .permissions import IsOwner,IsMachineLearningExpert
 from rest_framework import generics
@@ -74,7 +73,8 @@ e.g. only Admin, AI Engineer can do that but customer shall only use AI model fo
 training it or modifying it.
 
 """
-FLASK_MACHINE_LEARNING_API_URL="http://10.167.143.148:8001/train_classify_workout"
+# FLASK_MACHINE_LEARNING_API_URL="http://10.167.143.148:8001/train_model"
+FLASK_MACHINE_LEARNING_API_URL="http://ai:8001/train_model"
 FLASK_MACHINE_LEARNING_API_PREDICT_URL="http://10.167.143.148:8001/predict_classify_workout"
 
 API_KEY = "job_hunting_ai_memory_leakage"
@@ -112,3 +112,7 @@ class PredictWorkoutClassiferViewSet(viewsets.ViewSet):
         }
         machine_learning_prediction = requests.post(FLASK_MACHINE_LEARNING_API_PREDICT_URL, json=request.data, headers=headers)
         return Response(machine_learning_prediction.json(), status=machine_learning_prediction.status_code)
+
+
+
+

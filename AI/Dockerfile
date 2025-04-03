@@ -12,11 +12,14 @@ ENV PYTHONUNBUFFERED 1
 WORKDIR /app
 
 # Install system dependencies (e.g., for compiling any Python dependencies)
+# RUN apt-get update && \
+#     apt-get install -y build-essential libpq-dev && \
+#     apt-get clean
+
 RUN apt-get update && \
-    apt-get install -y build-essential libpq-dev && \
+    apt-get install -y python3-opencv libgl1 && \
+    rm -rf /var/lib/apt/lists/* \
     apt-get clean
-
-
     
 # Copy and install Python dependencies
 COPY requirements.txt .

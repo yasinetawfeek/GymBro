@@ -14,7 +14,7 @@ router.register(r'manage_accounts',AccountManagementViewSet, basename='manage_ac
 urlpatterns = [
     path('', include(router.urls)),
     path('my_account/', UserViewSet.as_view(), name='my_account'),
-    path('train_workout_classifer', TrainWorkoutClassiferViewSet.as_view({'post':'post'}),name='train_workout_classifer'),
+    path('train_model', TrainWorkoutClassiferViewSet.as_view({'post':'post'}),name='train_model'),
     path('predict_workout_classifer', PredictWorkoutClassiferViewSet.as_view({'post':'post'}),name='predict_workout_classifer')
 ]
 """

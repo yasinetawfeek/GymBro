@@ -11,17 +11,16 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.feature_selection import VarianceThreshold
 from sklearn.model_selection import GridSearchCV
-from lime import lime_tabular
+# from lime import lime_tabular
 from mediapipe_handler import MediaPipeHandler
 from get_work_out_labels import add_workout_label_back
-import seaborn as sns
+# import seaborn as sns
 from sklearn.svm import SVC
-from imblearn.over_sampling import SMOTE
+# from imblearn.over_sampling import SMOTE
 
-
-mediapipe_model = MediaPipeHandler()
-training_dataset=mediapipe_model.read_csv_to_pd("D:\\DesD_AI_pathway\\AI\\data\\train_new.csv")
-testing_dataset=mediapipe_model.read_csv_to_pd("D:\\DesD_AI_pathway\\AI\\data\\test_new.csv")
+# mediapipe_model = MediaPipeHandler()
+# training_dataset=mediapipe_model.read_csv_to_pd("D:\\DesD_AI_pathway\\AI\\data\\train_new.csv")
+# testing_dataset=mediapipe_model.read_csv_to_pd("D:\\DesD_AI_pathway\\AI\\data\\test_new.csv")
 
 print("loading dataset....")
 """
@@ -63,7 +62,9 @@ def Return_X_y(dataframe,columns_to_delete):
 # X_test, y_test = Return_X_y(testing_dataset_preprocessed,['label','muscle group','image','Unnamed: 0'])
 
 
-def train_model(training_dataset,testing_dataset):
+
+def train_workout_and_evaluate(training_dataset,testing_dataset):
+    
     print("trained!")
     # return 92.0
     features_to_split=['left_shoulder',
@@ -138,4 +139,4 @@ def train_model(training_dataset,testing_dataset):
 
 
 
-train_model(training_dataset,testing_dataset)
+# train_model(training_dataset,testing_dataset)
