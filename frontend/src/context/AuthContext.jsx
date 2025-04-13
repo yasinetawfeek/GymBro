@@ -4,6 +4,8 @@ import axios from 'axios';
 // Replace with your actual API base URL
 const API_URL = 'http://localhost:8000/';
 
+console.log('im in authcontext yo')
+
 export const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
