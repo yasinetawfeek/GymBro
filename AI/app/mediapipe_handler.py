@@ -11,12 +11,13 @@ import ast
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import os
+import random as rand
 
 class MediaPipeHandler():
     def __init__(self):
         print("current OS working directory is",os.getcwd())
-        # self.model_path = "DesD_AI_pathway\\AI\\app\\pose_landmarker_full.task" 
-        self.model_path=os.path.join("app", "pose_landmarker_full.task")
+        self.model_path = "/Users/yasinetawfeek/Developer/DesD_AI_pathway/AI/app/pose_landmarker_full.task" 
+        # self.model_path=os.path.join("app", "pose_landmarker_full.task")
 
         base_options = python.BaseOptions(model_asset_path=self.model_path)
         self.options = vision.PoseLandmarkerOptions(
@@ -206,7 +207,145 @@ class MediaPipeHandler():
 
         return df[df['left_shoulder'].map(len) != 0]
 
+    def add_noise_to_df(self, df, noise_intensity):
+        df_copy = df.copy(deep=True)
+        
+        left_shoulder = []          # 0
+        right_shoulder = []         # 1
+        left_elbow = []             # 2
+        right_elbow = []            # 3
+        left_wrist = []             # 4
+        right_wrist = []            # 5
+        left_pinky = []             # 6
+        right_pinky = []            # 7
+        left_index = []             # 8
+        right_index = []            # 9
+        left_thumb = []             # 10
+        right_thumb = []            # 11
+        left_hip = []               # 12
+        right_hip = []              # 13
+        left_knee = []              # 14
+        right_knee = []             # 15
+        left_ankle = []             # 16
+        right_ankle = []            # 17
+        left_heel = []              # 18
+        right_heel = []             # 19
+        left_foot_index = []        # 20 
+        right_foot_index = []       # 21 
 
+        for i, row in df_copy.iterrows():
+            left_shoulder.append([rand.uniform(row['left_shoulder'][0] - noise_intensity, row['left_shoulder'][0] + noise_intensity),
+             rand.uniform(row['left_shoulder'][1] - noise_intensity, row['left_shoulder'][1] + noise_intensity),
+             rand.uniform(row['left_shoulder'][2] - noise_intensity, row['left_shoulder'][2] + noise_intensity)])
+
+            right_shoulder.append([rand.uniform(row['right_shoulder'][0] - noise_intensity, row['right_shoulder'][0] + noise_intensity),
+             rand.uniform(row['right_shoulder'][1] - noise_intensity, row['right_shoulder'][1] + noise_intensity),
+             rand.uniform(row['right_shoulder'][2] - noise_intensity, row['right_shoulder'][2] + noise_intensity)])
+
+            left_elbow.append([rand.uniform(row['left_elbow'][0] - noise_intensity, row['left_elbow'][0] + noise_intensity),
+             rand.uniform(row['left_elbow'][1] - noise_intensity, row['left_elbow'][1] + noise_intensity),
+             rand.uniform(row['left_elbow'][2] - noise_intensity, row['left_elbow'][2] + noise_intensity)])
+
+            right_elbow.append([rand.uniform(row['right_elbow'][0] - noise_intensity, row['right_elbow'][0] + noise_intensity),
+             rand.uniform(row['right_elbow'][1] - noise_intensity, row['right_elbow'][1] + noise_intensity),
+             rand.uniform(row['right_elbow'][2] - noise_intensity, row['right_elbow'][2] + noise_intensity)])
+
+            left_wrist.append([rand.uniform(row['left_wrist'][0] - noise_intensity, row['left_wrist'][0] + noise_intensity),
+             rand.uniform(row['left_wrist'][1] - noise_intensity, row['left_wrist'][1] + noise_intensity),
+             rand.uniform(row['left_wrist'][2] - noise_intensity, row['left_wrist'][2] + noise_intensity)])
+
+            right_wrist.append([rand.uniform(row['right_wrist'][0] - noise_intensity, row['right_wrist'][0] + noise_intensity),
+             rand.uniform(row['right_wrist'][1] - noise_intensity, row['right_wrist'][1] + noise_intensity),
+             rand.uniform(row['right_wrist'][2] - noise_intensity, row['right_wrist'][2] + noise_intensity)])
+
+            left_pinky.append([rand.uniform(row['left_pinky'][0] - noise_intensity, row['left_pinky'][0] + noise_intensity),
+             rand.uniform(row['left_pinky'][1] - noise_intensity, row['left_pinky'][1] + noise_intensity),
+             rand.uniform(row['left_pinky'][2] - noise_intensity, row['left_pinky'][2] + noise_intensity)])
+
+            right_pinky.append([rand.uniform(row['right_pinky'][0] - noise_intensity, row['right_pinky'][0] + noise_intensity),
+             rand.uniform(row['right_pinky'][1] - noise_intensity, row['right_pinky'][1] + noise_intensity),
+             rand.uniform(row['right_pinky'][2] - noise_intensity, row['right_pinky'][2] + noise_intensity)])
+
+            left_index.append([rand.uniform(row['left_index'][0] - noise_intensity, row['left_index'][0] + noise_intensity),
+             rand.uniform(row['left_index'][1] - noise_intensity, row['left_index'][1] + noise_intensity),
+             rand.uniform(row['left_index'][2] - noise_intensity, row['left_index'][2] + noise_intensity)])
+
+            right_index.append([rand.uniform(row['right_index'][0] - noise_intensity, row['right_index'][0] + noise_intensity),
+             rand.uniform(row['right_index'][1] - noise_intensity, row['right_index'][1] + noise_intensity),
+             rand.uniform(row['right_index'][2] - noise_intensity, row['right_index'][2] + noise_intensity)])
+
+            left_thumb.append([rand.uniform(row['left_thumb'][0] - noise_intensity, row['left_thumb'][0] + noise_intensity),
+             rand.uniform(row['left_thumb'][1] - noise_intensity, row['left_thumb'][1] + noise_intensity),
+             rand.uniform(row['left_thumb'][2] - noise_intensity, row['left_thumb'][2] + noise_intensity)])
+
+            right_thumb.append([rand.uniform(row['right_thumb'][0] - noise_intensity, row['right_thumb'][0] + noise_intensity),
+             rand.uniform(row['right_thumb'][1] - noise_intensity, row['right_thumb'][1] + noise_intensity),
+             rand.uniform(row['right_thumb'][2] - noise_intensity, row['right_thumb'][2] + noise_intensity)])
+
+            left_hip.append([rand.uniform(row['left_hip'][0] - noise_intensity, row['left_hip'][0] + noise_intensity),
+             rand.uniform(row['left_hip'][1] - noise_intensity, row['left_hip'][1] + noise_intensity),
+             rand.uniform(row['left_hip'][2] - noise_intensity, row['left_hip'][2] + noise_intensity)])
+
+            right_hip.append([rand.uniform(row['right_hip'][0] - noise_intensity, row['right_hip'][0] + noise_intensity),
+             rand.uniform(row['right_hip'][1] - noise_intensity, row['right_hip'][1] + noise_intensity),
+             rand.uniform(row['right_hip'][2] - noise_intensity, row['right_hip'][2] + noise_intensity)])
+
+            left_knee.append([rand.uniform(row['left_knee'][0] - noise_intensity, row['left_knee'][0] + noise_intensity),
+             rand.uniform(row['left_knee'][1] - noise_intensity, row['left_knee'][1] + noise_intensity),
+             rand.uniform(row['left_knee'][2] - noise_intensity, row['left_knee'][2] + noise_intensity)])
+
+            right_knee.append([rand.uniform(row['right_knee'][0] - noise_intensity, row['right_knee'][0] + noise_intensity),
+             rand.uniform(row['right_knee'][1] - noise_intensity, row['right_knee'][1] + noise_intensity),
+             rand.uniform(row['right_knee'][2] - noise_intensity, row['right_knee'][2] + noise_intensity)])
+
+            left_ankle.append([rand.uniform(row['left_ankle'][0] - noise_intensity, row['left_ankle'][0] + noise_intensity),
+             rand.uniform(row['left_ankle'][1] - noise_intensity, row['left_ankle'][1] + noise_intensity),
+             rand.uniform(row['left_ankle'][2] - noise_intensity, row['left_ankle'][2] + noise_intensity)])
+
+            right_ankle.append([rand.uniform(row['right_ankle'][0] - noise_intensity, row['right_ankle'][0] + noise_intensity),
+             rand.uniform(row['right_ankle'][1] - noise_intensity, row['right_ankle'][1] + noise_intensity),
+             rand.uniform(row['right_ankle'][2] - noise_intensity, row['right_ankle'][2] + noise_intensity)])
+
+            left_heel.append([rand.uniform(row['left_heel'][0] - noise_intensity, row['left_heel'][0] + noise_intensity),
+             rand.uniform(row['left_heel'][1] - noise_intensity, row['left_heel'][1] + noise_intensity),
+             rand.uniform(row['left_heel'][2] - noise_intensity, row['left_heel'][2] + noise_intensity)])
+
+            right_heel.append([rand.uniform(row['right_heel'][0] - noise_intensity, row['right_heel'][0] + noise_intensity),
+             rand.uniform(row['right_heel'][1] - noise_intensity, row['right_heel'][1] + noise_intensity),
+             rand.uniform(row['right_heel'][2] - noise_intensity, row['right_heel'][2] + noise_intensity)])
+
+            left_foot_index.append([rand.uniform(row['left_foot_index'][0] - noise_intensity, row['left_foot_index'][0] + noise_intensity),
+             rand.uniform(row['left_foot_index'][1] - noise_intensity, row['left_foot_index'][1] + noise_intensity),
+             rand.uniform(row['left_foot_index'][2] - noise_intensity, row['left_foot_index'][2] + noise_intensity)])
+
+            right_foot_index.append([rand.uniform(row['right_foot_index'][0] - noise_intensity, row['right_foot_index'][0] + noise_intensity),
+             rand.uniform(row['right_foot_index'][1] - noise_intensity, row['right_foot_index'][1] + noise_intensity),
+             rand.uniform(row['right_foot_index'][2] - noise_intensity, row['right_foot_index'][2] + noise_intensity)])
+            
+        df_copy['left_shoulder'] = left_shoulder
+        df_copy['right_shoulder'] = right_shoulder
+        df_copy['left_elbow'] = left_elbow
+        df_copy['right_elbow'] = right_elbow
+        df_copy['left_wrist'] = left_wrist
+        df_copy['right_wrist'] = right_wrist
+        df_copy['left_pinky'] = left_pinky
+        df_copy['right_pinky'] = right_pinky
+        df_copy['left_index'] = left_index
+        df_copy['right_index'] = right_index
+        df_copy['left_thumb'] = left_thumb
+        df_copy['right_thumb'] = right_thumb
+        df_copy['left_hip'] = left_hip
+        df_copy['right_hip'] = right_hip
+        df_copy['left_knee'] = left_knee
+        df_copy['right_knee'] = right_knee
+        df_copy['left_ankle'] = left_ankle
+        df_copy['right_ankle'] = right_ankle
+        df_copy['left_heel'] = left_heel
+        df_copy['right_heel'] = right_heel
+        df_copy['left_foot_index'] = left_foot_index
+        df_copy['right_foot_index'] = right_foot_index
+
+        return pd.concat([df,df_copy], ignore_index=True)
 
     def visualise_from_pose(self, pose):
         x, y, z = pose[:, 0], pose[:, 1], pose[:, 2]
@@ -310,6 +449,8 @@ class MediaPipeHandler():
             df.at[i, 'right_foot_index'] = np.array(list(map(float, row['right_foot_index'].strip('[]').split())))
         
         return df
+    
+
 
 # TODO clean up and change to consts and dictionary
 def add_new_label(example):
