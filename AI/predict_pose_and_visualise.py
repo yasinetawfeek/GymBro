@@ -1,4 +1,4 @@
-from mediapipe_handler import MediaPipeHandler
+from DesD_AI_pathway.AI.app.mediapipe_handler import MediaPipeHandler
 import numpy as np
 from PIL import Image
 import cv2

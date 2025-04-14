@@ -3,10 +3,6 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .viewsets import *
 
-# Create a router for our viewsets
-router = DefaultRouter()
-
-
 router = DefaultRouter()
 # router.register(r'users', UserViewSet.as_view(), basename='user')
 router.register(r'manage_accounts',AccountManagementViewSet, basename='manage_account')
@@ -14,10 +10,12 @@ router.register(r'manage_accounts',AccountManagementViewSet, basename='manage_ac
 # urlpatterns = router.urls
 
 urlpatterns = [
+    path('', include(router.urls)),
     path('my_account/', UserViewSet.as_view(), name='my_account'),
+    path('train_model', TrainWorkoutClassiferViewSet.as_view({'post':'post'}),name='train_model'),
+    path('predict_workout_classifer', PredictWorkoutClassiferViewSet.as_view({'post':'post'}),name='predict_workout_classifer'),
     path('stream-info/', StreamViewSet.as_view({'get': 'stream_info'}), name='stream-info'),
     path('get-token/', StreamViewSet.as_view({'get': 'get_token'}), name='get-token'),
-     path('', include(router.urls)),
 ]
 
 """
@@ -49,5 +47,3 @@ DELETE /manage_accounts/1/ --> Deletes the user with id 1
 to check more about all url in this app write python manage.py show_urls
 
 """
-
-

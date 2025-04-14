@@ -13,11 +13,13 @@ import {
 } from 'lucide-react';
 
 import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
 import { useNavigate } from "react-router-dom";
 
-const url = "http://localhost:8000/"
-
 const AuthPage = () => {
+  console.log('auth page')
+  const { login, register, user } = useAuth();
+  console.log('error not in first useAuth')
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,7 +28,8 @@ const AuthPage = () => {
   const [errors, setErrors] = useState({});
   const [generalError, setGeneralError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const navigate = useNavigate;
+  
+  const navigate = useNavigate();
 
   // Check system preference on initial load
   useEffect(() => {
@@ -43,17 +46,15 @@ const AuthPage = () => {
     }
   }, [isDarkMode]);
 
+  useEffect(() => {
+    if (user) navigate('/');
+  }, [user, navigate]);
+
   // Reset errors when switching between login and signup
   useEffect(() => {
     setErrors({});
     setGeneralError('');
   }, [isLogin]);
-
-const [shouldNavigate, setShouldNavigate] = useState(false);
-
-useEffect(() => {
-  if (shouldNavigate) navigate("/dashboard");
-}, [shouldNavigate, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -62,31 +63,19 @@ useEffect(() => {
     setIsLoading(true);
   
     try {
-      let data;
       if (isLogin) {
-        data = { username, password };
-        const response = await axios.post(`${url}auth/jwt/create/`, data);
-        localStorage.setItem('access_token', response.data.access);
-        localStorage.setItem('refresh_token', response.data.refresh);
-        setShouldNavigate(true);
+        await login(username, password);
+        console.log('loggedin')
+        navigate('/');
       } else {
-        data = { email, username, password, re_password: password };
-        await axios.post(`${url}auth/users/`, data);
+        await register(email, username, password);
         setIsLogin(true);
         setGeneralError('Account created! Please log in.');
       }
     } catch (error) {
-      console.error(error);
-      console.error(error);
-
       if (error.response) {
-        if (error.response.status === 401 || error.response.status === 400) {
-          setGeneralError('Incorrect username or password.');
-        } else if (error.response.data) {
-          setErrors(error.response.data);
-        } else {
-          setGeneralError('An error occurred. Please try again.');
-        }
+        setErrors(error.response.data || {});
+        setGeneralError('An error occurred. Please try again.');
       } else {
         setGeneralError('Network error. Please check your connection.');
       }
@@ -121,8 +110,8 @@ useEffect(() => {
 
   return (
     <div className={`fixed inset-0 ${isDarkMode 
-        ? 'bg-gradient-to-br from-gray-900 to-gray-800 text-gray-100' 
-        : 'bg-gradient-to-br from-indigo-50 to-purple-100 text-gray-900'
+        ? 'bg-gradient-to-br from-gray-800 to-indigo-500 text-gray-100' 
+        : 'bg-gradient-to-br from-gray-100 to-indigo-500 text-gray-900'
       } transition-colors duration-300 overflow-y-auto flex items-center justify-center p-4`}>
       {/* Dark Mode Toggle */}
       <button 
@@ -318,6 +307,18 @@ useEffect(() => {
               {isLogin 
                 ? 'Need an account? Sign Up' 
                 : 'Already have an account? Log In'}
+            </button>
+          </div>
+          <div className="text-center mt-4">
+            <button 
+              onClick={()=>navigate("/")}
+              className={`hover:underline ${
+                isDarkMode 
+                  ? 'text-purple-400 hover:text-purple-300' 
+                  : 'text-blue-600 hover:text-blue-500'
+                }`}
+            >
+              Return Home
             </button>
           </div>
         </div>
