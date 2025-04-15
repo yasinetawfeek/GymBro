@@ -39,14 +39,12 @@ schema_view = get_schema_view(
 urlpatterns = [
     # Admin panel
     path("admin/", admin.site.urls),
-    
-    # Our application APIs
-    path("api/", include("DESD_App.urls")),  # API endpoints with /api/ prefix
-    
-    # Authentication endpoints provided by djoser
-    path("auth/", include("djoser.urls")),
-    path("auth/", include("djoser.urls.jwt")),
-    
+    path("api/",include("DESD_App.urls")), #all of the url requests inside this app must start with /api/end_point name
+
+    path("auth/",include("djoser.urls")),  #provided by djoser for Authentication purposes automatically
+    path("auth/",include("djoser.urls.jwt")), #provided by djoser for Authentication purposes automatically especially for JWT authentication
+    path('api-auth/', include('rest_framework.urls')),
+  
     # All video streaming endpoints now use the /api/ prefix
     # No more legacy endpoints
     
@@ -56,6 +54,7 @@ urlpatterns = [
     re_path(r'^redoc/$', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
 
 """
 ----------------------------------------------------------------
@@ -77,7 +76,7 @@ POST /auth/token/login/ --> Obtain an Authentication token
 
 """
 ----------------------------------------------------------------
-for auth/ djoser.urls.jwt, the following end points:
+for auth/ djoser.urls.jwt, the following endpoints:
 
 POST /auth/jwt/create --> Creates a new stateless [JWT] token or refreshes the current token
 
