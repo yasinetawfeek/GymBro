@@ -29,12 +29,12 @@ def mediapipe_format_dataset_handler(dataset_name):
         test_with_noise = test
         validation_with_noise = validation
 
-        duplicate_noise_positions_exponential = 2
+        duplicate_noise_positions_exponential = 7
         noise_intensity = 0.02
         for i in range(duplicate_noise_positions_exponential):
-            train_with_noise = media_pipe_handler.add_noise_to_df(train_with_noise, noise_intensity)
-            test_with_noise = media_pipe_handler.add_noise_to_df(test_with_noise, noise_intensity)
-            validation_with_noise = media_pipe_handler.add_noise_to_df(validation_with_noise, noise_intensity)
+            train_with_noise = pd.concat([train_with_noise, media_pipe_handler.add_noise_to_df(train, noise_intensity)], ignore_index=True) 
+            test_with_noise = pd.concat([test_with_noise, media_pipe_handler.add_noise_to_df(test, noise_intensity)], ignore_index=True)
+            validation_with_noise = pd.concat([validation_with_noise, media_pipe_handler.add_noise_to_df(validation, noise_intensity)], ignore_index=True)
 
         os.makedirs('data', exist_ok=True)
 
