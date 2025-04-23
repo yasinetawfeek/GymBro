@@ -23,8 +23,8 @@ const NavBar = ({ isDarkMode,}) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const navigate = useNavigate()
   const user = useAuth()
-  console.log('user:')
-  console.log(user)
+  // console.log('user:')
+  // console.log(user)
 
   return (
     <header className={`${ 
