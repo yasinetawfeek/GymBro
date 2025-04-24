@@ -4,17 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import * as poseDetection from '@mediapipe/pose';
 import { POSE_CONNECTIONS } from '@mediapipe/pose';
 import { Camera } from '@mediapipe/camera_utils';
+import io from 'socket.io-client';
 
 // Utility functions
-const createRandomSeed = () => {
-  return Array(33).fill().map(() => ({
-    x: Math.random() * 0.05 - 0.025,
-    y: Math.random() * 0.05 - 0.025
-  }));
-};
-
-const jointsToHide = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 17, 18, 19, 20, 21, 22, 29, 30, 31, 32]; // Example: head and face joints
-
 const getJointName = (index) => {
   switch(index) {
     case 11: return "Left Shoulder";
@@ -70,8 +62,7 @@ const drawArrow = (ctx, fromX, fromY, toX, toY, color, lineWidth) => {
 // Drawing functions
 const drawUserPose = (ctx, landmarks, canvasWidth, canvasHeight) => {
   // Draw circles for body landmarks only
-  for (let i = 0; i < landmarks.length; i++) {
-    if (!jointsToHide.includes(i)) {
+  for (let i = 11; i < landmarks.length; i++) {
     const x = landmarks[i].x * canvasWidth;
     const y = landmarks[i].y * canvasHeight;
 
@@ -79,11 +70,11 @@ const drawUserPose = (ctx, landmarks, canvasWidth, canvasHeight) => {
     ctx.arc(x, y, 5, 0, 2 * Math.PI);
     ctx.fillStyle = '#8b5cf6'; // purple
     ctx.fill();
-  }}
+  }
 
   // Draw lines between body-only connections
   POSE_CONNECTIONS.forEach(([i, j]) => {
-    if (!jointsToHide.includes(i) && !jointsToHide.includes(j))  {
+    if (i >= 11 && j >= 11) {
       const p1 = landmarks[i];
       const p2 = landmarks[j];
 
@@ -97,41 +88,44 @@ const drawUserPose = (ctx, landmarks, canvasWidth, canvasHeight) => {
   });
 };
 
-const findJointsToCorrect = (landmarks, randomSeed) => {
+const findJointsToCorrect = (landmarks, corrections) => {
   const correctJoints = [];
   
-  for (let i = 0; i < landmarks.length; i++) {
-    if (!jointsToHide.includes(i)) {
-    const random = randomSeed[i];
-    // If the deviation is significant, mark it for correction
-    if (Math.abs(random.x) > 0.02 || Math.abs(random.y) > 0.02) {
+  // Only check joints that have correction data
+  Object.keys(corrections).forEach(indexStr => {
+    const i = parseInt(indexStr);
+    const correction = corrections[indexStr];
+    
+    // If correction is significant enough (threshold can be adjusted)
+    if (Math.abs(correction.x) > 0.01 || Math.abs(correction.y) > 0.01) {
       const jointName = getJointName(i);
-      if (jointName) {
+      if (jointName && i < landmarks.length) {
         correctJoints.push({
           name: jointName,
-          index: i
+          index: i,
+          correction: correction
         });
       }
     }
-  }}
+  });
   
   return correctJoints;
 };
 
-const drawCorrectionArrows = (ctx, landmarks, randomSeed, jointsToCorrect, canvasWidth, canvasHeight) => {
+const drawCorrectionArrows = (ctx, landmarks, corrections, jointsToCorrect, canvasWidth, canvasHeight) => {
   jointsToCorrect.forEach(joint => {
     const i = joint.index;
     const originalX = landmarks[i].x * canvasWidth;
     const originalY = landmarks[i].y * canvasHeight;
     
-    // Get correction offset from correction data
-    const offsetX = randomSeed[i].x;
-    const offsetY = randomSeed[i].y;
+    // Get correction from the model output
+    const correction = joint.correction;
     
-    const targetX = (landmarks[i].x + offsetX) * canvasWidth;
-    const targetY = (landmarks[i].y + offsetY) * canvasHeight;
+    // Calculate target point (current position + correction)
+    const targetX = (landmarks[i].x + correction.x) * canvasWidth;
+    const targetY = (landmarks[i].y + correction.y) * canvasHeight;
     
-    // Calculate extended target point (50% longer)
+    // Calculate extended target point (50% longer for better visibility)
     const vectorX = targetX - originalX;
     const vectorY = targetY - originalY;
     const extendedTargetX = originalX + vectorX * 1.5;
@@ -164,33 +158,54 @@ const TrainingPage = () => {
   const canvasRef = useRef(null);
   const [outOfFrame, setOutOfFrame] = useState(false);
   const [userLandmarks, setUserLandmarks] = useState(null);
+  const [corrections, setCorrections] = useState({});
+  const socketRef = useRef(null);
   
-  // Random seed for consistent random movements within a frame
-  const randomSeedRef = useRef(createRandomSeed());
-  
-  // Update random seed every 3 seconds for more visible, longer-lasting movements
+  // Socket connection setup
   useEffect(() => {
-    const intervalId = setInterval(() => {
-      // Choose several random joints to modify each time (not all)
-      const newRandomValues = [...randomSeedRef.current];
-      
-      // Select 3-5 random joints to modify
-      const numJointsToModify = Math.floor(Math.random() * 3) + 3; 
-      for (let i = 0; i < numJointsToModify; i++) {
-        // Select a joint index (focusing on body parts, not face)
-        const jointIndex = Math.floor(Math.random() * 22) + 11; 
-        // Give it a new random offset
-        newRandomValues[jointIndex] = {
-          x: Math.random() * 0.07 - 0.035, // Larger values: -0.035 to 0.035
-          y: Math.random() * 0.07 - 0.035
-        };
-      }
-      
-      randomSeedRef.current = newRandomValues;
-    }, 3000); // Update every 3 seconds
+    // Create socket connection
+    socketRef.current = io('http://localhost:8001');
     
-    return () => clearInterval(intervalId);
+    socketRef.current.on('connect', () => {
+      console.log('Connected to WebSocket server');
+    });
+    
+    socketRef.current.on('connected', (data) => {
+      console.log('Server connection confirmed:', data);
+    });
+    
+    socketRef.current.on('pose_corrections', (data) => {
+      console.log('Received corrections:', data);
+      setCorrections(data);
+    });
+    
+    socketRef.current.on('error', (data) => {
+      console.error('WebSocket error:', data.message);
+    });
+    
+    // Clean up on unmount
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+    };
   }, []);
+  
+  // Send landmarks to server when they update
+  useEffect(() => {
+    if (userLandmarks && socketRef.current && socketRef.current.connected) {
+      // Throttle updates to reduce network traffic (every 100ms)
+      const throttleDelay = 100; // ms
+      
+      const timerId = setTimeout(() => {
+        socketRef.current.emit('pose_data', {
+          landmarks: userLandmarks
+        });
+      }, throttleDelay);
+      
+      return () => clearTimeout(timerId);
+    }
+  }, [userLandmarks]);
 
   // Dark mode setup
   useEffect(() => {
@@ -201,8 +216,6 @@ const TrainingPage = () => {
   useEffect(() => {
     document.body.classList.toggle('dark', isDarkMode);
   }, [isDarkMode]);
-
-  const toggleDarkMode = () => setIsDarkMode(!isDarkMode);
 
   // MediaPipe Pose setup
   useEffect(() => {
@@ -243,15 +256,11 @@ const TrainingPage = () => {
       const landmarks = results.poseLandmarks;
       
       // Check if user is in frame
-      const visiblePoints = results.poseLandmarks
-        .map((landmark, index) => ({ ...landmark, index }))
-        .filter(
-          (landmark) =>
-            landmark.visibility > 0.6 && !jointsToHide.includes(landmark.index)
-        );
+      const visiblePoints = landmarks.filter(
+        (landmark) => landmark.visibility > 0.6
+      );
 
-      // You can tweak this threshold (e.g., at least 12 visible points)
-      if (visiblePoints.length < 1) { // I Set it to 1 for now, just to test
+      if (visiblePoints.length < 12) {
         setOutOfFrame(true);
       } else {
         setOutOfFrame(false);
@@ -271,11 +280,11 @@ const TrainingPage = () => {
       // Draw user pose
       drawUserPose(ctx, landmarks, canvas.width, canvas.height);
       
-      // Find joints that need correction
-      const jointsToCorrect = findJointsToCorrect(landmarks, randomSeedRef.current);
+      // Find joints that need correction based on model output
+      const jointsToCorrect = findJointsToCorrect(landmarks, corrections);
       
       // Draw correction arrows
-      drawCorrectionArrows(ctx, landmarks, randomSeedRef.current, jointsToCorrect, canvas.width, canvas.height);
+      drawCorrectionArrows(ctx, landmarks, corrections, jointsToCorrect, canvas.width, canvas.height);
 
       ctx.restore();
     }
@@ -283,7 +292,7 @@ const TrainingPage = () => {
     return () => {
       camera.stop();
     };
-  }, []);
+  }, [corrections]); // Add corrections as dependency to redraw when new data arrives
 
   return (
     <section className={`overflow-scroll fixed inset-0 ${isDarkMode ? 'bg-gradient-to-br from-gray-800 to-indigo-500' : 'bg-gradient-to-br from-gray-100 to-indigo-500'}`}>
@@ -305,6 +314,9 @@ const TrainingPage = () => {
               className="absolute top-0 left-0 w-full h-full" 
               style={{ transform: 'scaleX(-1)' }}
             />
+          </div>
+          <div className="mt-4 text-center text-sm text-gray-700 dark:text-gray-300">
+            <p>Workout Type: Barbell Bicep Curl</p>
           </div>
         </div>
       </main>

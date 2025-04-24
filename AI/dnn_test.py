@@ -109,7 +109,35 @@ def plot_comparison(true, pred, title="Predictions vs True Values"):
                   bbox=dict(facecolor='white', alpha=0.5), 
                   verticalalignment='center')
     
-    plt.show()
+    # Save the plot instead of showing it
+    plt.savefig('prediction_comparison.png')
+    print("Plot saved as 'prediction_comparison.png'")
+
+# Workout type mapping for reference
+workout_map = {
+    0: "barbell bicep curl",
+    1: "bench press",
+    2: "chest fly machine",
+    3: "deadlift",
+    4: "decline bench press",
+    5: "hammer curl",
+    6: "hip thrust",
+    7: "incline bench press",
+    8: "lat pulldown",
+    9: "lateral raises",
+    10: "leg extensions",
+    11: "leg raises",
+    12: "plank",
+    13: "pull up",
+    14: "push ups",
+    15: "romanian deadlift",
+    16: "russian twist",
+    17: "shoulder press",
+    18: "squat",
+    19: "t bar row",
+    20: "tricep dips",
+    21: "tricep pushdown"
+}
 
 def main():
     # Initialize the model with the same architecture
@@ -131,32 +159,50 @@ def main():
     # Set model to evaluation mode
     model.eval()
     
-    # Create a sample input (random data for testing)
-    # In a real scenario, this would be your actual input data
-    sample_input = torch.rand(1, 37, dtype=torch.float32).to(device)
-    print(f"Sample input shape: {sample_input.shape}")
+    # Create example input data - this would be your pose landmarks in a real scenario
+    # Format: 36 pose features (x,y,z coordinates of 12 joints) + 1 workout type
     
-    # Make a prediction
-    with torch.no_grad():
-        prediction = model(sample_input)
-        print(f"Prediction shape: {prediction.shape}")
+    # Example: Generate a random pose (replace with your actual pose data)
+    pose_features = np.random.uniform(-0.5, 0.5, 36)  # 36 features for 12 joints (x,y,z for each)
     
-    # Convert to numpy for display
-    input_np = sample_input[0].cpu().numpy()
-    prediction_np = prediction[0].cpu().numpy()
+    # Different workout examples to test
+    workout_types = [0, 5, 14, 18]  # Try different workout types: bicep curl, hammer curl, push ups, squat
     
-    print("Sample input values:")
-    print(input_np)
-    print("\nPrediction values:")
-    print(prediction_np)
+    for workout_type in workout_types:
+        # Create the input by combining pose features with the workout type
+        # Workout type is the last element in the input array
+        input_data = np.append(pose_features, workout_type)
+        
+        # Convert to tensor
+        input_tensor = torch.tensor(input_data, dtype=torch.float32).unsqueeze(0).to(device)  # Add batch dimension
+        
+        # Make a prediction
+        with torch.no_grad():
+            prediction = model(input_tensor)
+            prediction_np = prediction[0].cpu().numpy()
+        
+        print(f"\n--- Prediction for workout type: {workout_type} ({workout_map[workout_type]}) ---")
+        print(f"Input shape: {input_tensor.shape}")
+        print(f"Output shape: {prediction.shape}")
+        
+        # The prediction is the correction that should be applied to the original pose
+        # Display a few values from the prediction
+        print("Sample prediction values (pose corrections):")
+        for i in range(0, len(prediction_np), 6):  # Show every 6th value for brevity
+            print(f"Joint {i//3} axis {i%3}: {prediction_np[i]:.6f}")
+        
+        # In a real application, you would apply these corrections to the original pose
+        corrected_pose = pose_features + prediction_np
+        
+        # Visualize the prediction (comparing original pose with corrected pose)
+        if workout_type == workout_types[-1]:  # Only plot for the last workout type
+            plot_comparison(
+                pose_features, 
+                corrected_pose, 
+                title=f"Pose Correction for {workout_map[workout_type]}"
+            )
     
-    # Visualize the prediction (comparing with random "true" values for demonstration)
-    # In a real scenario, you would compare with actual ground truth
-    # Here we just use the input as a stand-in for "true" values (for demonstration only)
-    mock_target = input_np[:36]  # Assuming output_dim=36
-    plot_comparison(mock_target, prediction_np, title="Sample Prediction Visualization")
-    
-    print("Test completed successfully!")
+    print("\nTest completed successfully!")
 
 if __name__ == "__main__":
     main() 
