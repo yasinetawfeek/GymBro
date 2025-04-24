@@ -8,6 +8,32 @@ import { POSE_CONNECTIONS } from '@mediapipe/pose';
 import { Camera } from '@mediapipe/camera_utils';
 import io from 'socket.io-client';
 
+// Add workout mapping (matching the backend)
+const workoutMap = { 
+  0: "Barbell Bicep Curl", 
+  1: "Bench Press", 
+  2: "Chest Fly Machine", 
+  3: "Deadlift",
+  4: "Decline Bench Press", 
+  5: "Hammer Curl", 
+  6: "Hip Thrust", 
+  7: "Incline Bench Press", 
+  8: "Lat Pulldown", 
+  9: "Lateral Raises", 
+  10: "Leg Extensions", 
+  11: "Leg Raises",
+  12: "Plank", 
+  13: "Pull Up", 
+  14: "Push Ups", 
+  15: "Romanian Deadlift", 
+  16: "Russian Twist", 
+  17: "Shoulder Press", 
+  18: "Squat", 
+  19: "T Bar Row", 
+  20: "Tricep Dips", 
+  21: "Tricep Pushdown"
+};
+
 // --- Utility functions (Unchanged) ---
 const getJointName = (index) => {
   switch(index) {
@@ -114,6 +140,23 @@ const FullscreenButton = ({ isFullscreen, toggleFullscreen }) => {
   );
 };
 
+// Now add a new workout selector component
+const WorkoutSelector = ({ selectedWorkout, onSelectWorkout, isFullscreen }) => {
+  return (
+    <div className={`${isFullscreen ? 'absolute top-16 left-4 z-40' : 'mb-2'}`}>
+      <select 
+        value={selectedWorkout} 
+        onChange={(e) => onSelectWorkout(Number(e.target.value))}
+        className={`px-3 py-1 rounded-md ${isFullscreen ? 'bg-black/40 text-white border border-gray-500' : 'bg-white dark:bg-gray-700 border dark:border-gray-600'}`}
+      >
+        {Object.entries(workoutMap).map(([id, name]) => (
+          <option key={id} value={id}>{name}</option>
+        ))}
+      </select>
+    </div>
+  );
+};
+
 // --- Main TrainingPage Component ---
 const TrainingPage = () => {
   const navigate = useNavigate();
@@ -123,8 +166,8 @@ const TrainingPage = () => {
   const [outOfFrame, setOutOfFrame] = useState(false);
   const [userLandmarksForDrawing, setUserLandmarksForDrawing] = useState(null);
   const latestLandmarksRef = useRef(null);
-  const [corrections, setCorrections] = useState({}); // State for corrections data (might be needed for other UI)
-  const latestCorrectionsRef = useRef({}); // *** ADDED REF for latest corrections ***
+  const [corrections, setCorrections] = useState({});
+  const latestCorrectionsRef = useRef({});
   const socketRef = useRef(null);
   const [connectionStatus, setConnectionStatus] = useState("connecting");
   const lastLandmarkUpdateRef = useRef(0);
@@ -134,8 +177,9 @@ const TrainingPage = () => {
   const poseInstanceRef = useRef(null);
   const cameraInstanceRef = useRef(null);
   const sendIntervalRef = useRef(null);
-  // Add state for tracking fullscreen
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // Add selected workout state
+  const [selectedWorkout, setSelectedWorkout] = useState(12); // Default to plank (12)
 
   // Add function to toggle fullscreen
   const toggleFullscreen = () => {
@@ -217,7 +261,7 @@ const TrainingPage = () => {
     }
   };
 
-  // --- Send Landmarks Interval (Unchanged) ---
+  // Modify the send interval to include the selected workout type
   useEffect(() => {
     const sendIntervalDelay = 50;
     if (sendIntervalRef.current) { clearInterval(sendIntervalRef.current); }
@@ -227,12 +271,16 @@ const TrainingPage = () => {
       const socketIsConnected = socketRef.current?.connected;
       if (landmarksToSend && socketIsConnected) {
         const sendTimestamp = Date.now();
-        // console.log(`[Data Send] Interval fired. Emitting pose_data at ${new Date(sendTimestamp).toLocaleTimeString()}`);
-        socketRef.current.emit('pose_data', { landmarks: landmarksToSend, timestamp: sendTimestamp });
+        // Updated to include selected workout
+        socketRef.current.emit('pose_data', { 
+          landmarks: landmarksToSend, 
+          workout_type: selectedWorkout, // Send the selected workout type
+          timestamp: sendTimestamp 
+        });
       }
     }, sendIntervalDelay);
     return () => { if (sendIntervalRef.current) { console.log("[Data Send] Clearing send interval."); clearInterval(sendIntervalRef.current); sendIntervalRef.current = null; } };
-  }, []);
+  }, [selectedWorkout]); // Add selectedWorkout as dependency to update when changed
 
   // --- Correction Timeout Check (Unchanged) ---
   useEffect(() => {
@@ -379,10 +427,26 @@ const TrainingPage = () => {
       {/* <NavBar isDarkMode={isDarkMode} /> */}
       <main className={isFullscreen ? "h-full" : ""}>
         <div className={fullscreenStyles.container}>
+          {/* Add workout selector before video container when not in fullscreen */}
+          {!isFullscreen && (
+            <WorkoutSelector 
+              selectedWorkout={selectedWorkout} 
+              onSelectWorkout={setSelectedWorkout} 
+              isFullscreen={isFullscreen}
+            />
+          )}
           <div className={fullscreenStyles.videoContainer}>
             {outOfFrame && <OutOfFrameWarning />}
             <ConnectionStatus status={connectionStatus} />
             <FullscreenButton isFullscreen={isFullscreen} toggleFullscreen={toggleFullscreen} />
+            {/* Add workout selector when in fullscreen mode */}
+            {isFullscreen && (
+              <WorkoutSelector 
+                selectedWorkout={selectedWorkout} 
+                onSelectWorkout={setSelectedWorkout} 
+                isFullscreen={isFullscreen}
+              />
+            )}
             <video
               ref={webcamRef}
               className="absolute top-0 left-0 w-full h-full object-cover rounded-lg"
@@ -404,7 +468,7 @@ const TrainingPage = () => {
             />
           </div>
           <div className={fullscreenStyles.infoPanel}>
-            <p>Workout Type: {isFullscreen ? 'Plank' : 'Barbell Bicep Curl'}</p>
+            <p>Workout Type: {workoutMap[selectedWorkout]}</p>
             {(feedbackLatency > 0 || receivedCount > 0) && (
               <p className={`${isFullscreen ? '' : 'mt-1'} text-xs`}>
                 Latency: {feedbackLatency > 0 ? `${feedbackLatency}ms` : 'N/A'} | Corrections: {receivedCount}

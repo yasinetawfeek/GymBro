@@ -183,7 +183,19 @@ def handle_pose_data(data):
             print(f"Warning: Landmark processing for client {client_id} resulted in {len(flat_landmarks)} values, expected 36. Padding/truncating.")
             flat_landmarks = (flat_landmarks + [0]*36)[:36] # Ensure exactly 36 values
 
-        workout_type = 12  # Changed from 0 (bicep curl) to 18 (squat)
+        # Get workout type from client data or use default
+        workout_type = data.get('workout_type', 12)  # Use client-selected workout or default to plank (12)
+        
+        # Ensure workout_type is an integer and valid
+        try:
+            workout_type = int(workout_type)
+            if workout_type not in workout_map:
+                print(f"Warning: Invalid workout_type {workout_type} received, defaulting to plank (12)")
+                workout_type = 12
+        except (ValueError, TypeError):
+            print(f"Warning: Non-integer workout_type {workout_type} received, defaulting to plank (12)")
+            workout_type = 12
+            
         print(f"Using workout type: {workout_map[workout_type]}")
 
         # --- Get Corrections (Handles Throttling) ---
