@@ -5,6 +5,154 @@ import * as poseDetection from '@mediapipe/pose';
 import { POSE_CONNECTIONS } from '@mediapipe/pose';
 import { Camera } from '@mediapipe/camera_utils';
 
+// Utility functions
+const createRandomSeed = () => {
+  return Array(33).fill().map(() => ({
+    x: Math.random() * 0.05 - 0.025,
+    y: Math.random() * 0.05 - 0.025
+  }));
+};
+
+const getJointName = (index) => {
+  switch(index) {
+    case 11: return "Left Shoulder";
+    case 12: return "Right Shoulder";
+    case 13: return "Left Elbow";
+    case 14: return "Right Elbow";
+    case 15: return "Left Wrist";
+    case 16: return "Right Wrist";
+    case 23: return "Left Hip";
+    case 24: return "Right Hip";
+    case 25: return "Left Knee";
+    case 26: return "Right Knee";
+    case 27: return "Left Ankle";
+    case 28: return "Right Ankle";
+    default: return "";
+  }
+};
+
+const getArrowColor = (distance) => {
+  if (distance < 15) {
+    return '#eab308'; // yellow
+  } else if (distance < 30) {
+    return '#f97316'; // orange
+  } else {
+    return '#ef4444'; // red
+  }
+};
+
+const drawArrow = (ctx, fromX, fromY, toX, toY, color, lineWidth) => {
+  const headLength = 15;
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  const angle = Math.atan2(dy, dx);
+  
+  // Draw line
+  ctx.beginPath();
+  ctx.moveTo(fromX, fromY);
+  ctx.lineTo(toX, toY);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.stroke();
+  
+  // Draw arrowhead
+  ctx.beginPath();
+  ctx.moveTo(toX, toY);
+  ctx.lineTo(toX - headLength * Math.cos(angle - Math.PI/6), toY - headLength * Math.sin(angle - Math.PI/6));
+  ctx.lineTo(toX - headLength * Math.cos(angle + Math.PI/6), toY - headLength * Math.sin(angle + Math.PI/6));
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+};
+
+// Drawing functions
+const drawUserPose = (ctx, landmarks, canvasWidth, canvasHeight) => {
+  // Draw circles for body landmarks only
+  for (let i = 11; i < landmarks.length; i++) {
+    const x = landmarks[i].x * canvasWidth;
+    const y = landmarks[i].y * canvasHeight;
+
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, 2 * Math.PI);
+    ctx.fillStyle = '#8b5cf6'; // purple
+    ctx.fill();
+  }
+
+  // Draw lines between body-only connections
+  POSE_CONNECTIONS.forEach(([i, j]) => {
+    if (i >= 11 && j >= 11) {
+      const p1 = landmarks[i];
+      const p2 = landmarks[j];
+
+      ctx.beginPath();
+      ctx.moveTo(p1.x * canvasWidth, p1.y * canvasHeight);
+      ctx.lineTo(p2.x * canvasWidth, p2.y * canvasHeight);
+      ctx.strokeStyle = '#a78bfa'; // lighter purple
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  });
+};
+
+const findJointsToCorrect = (landmarks, randomSeed) => {
+  const correctJoints = [];
+  
+  for (let i = 11; i < landmarks.length; i++) {
+    const random = randomSeed[i];
+    // If the deviation is significant, mark it for correction
+    if (Math.abs(random.x) > 0.02 || Math.abs(random.y) > 0.02) {
+      const jointName = getJointName(i);
+      if (jointName) {
+        correctJoints.push({
+          name: jointName,
+          index: i
+        });
+      }
+    }
+  }
+  
+  return correctJoints;
+};
+
+const drawCorrectionArrows = (ctx, landmarks, randomSeed, jointsToCorrect, canvasWidth, canvasHeight) => {
+  jointsToCorrect.forEach(joint => {
+    const i = joint.index;
+    const originalX = landmarks[i].x * canvasWidth;
+    const originalY = landmarks[i].y * canvasHeight;
+    
+    // Get correction offset from correction data
+    const offsetX = randomSeed[i].x;
+    const offsetY = randomSeed[i].y;
+    
+    const targetX = (landmarks[i].x + offsetX) * canvasWidth;
+    const targetY = (landmarks[i].y + offsetY) * canvasHeight;
+    
+    // Calculate extended target point (50% longer)
+    const vectorX = targetX - originalX;
+    const vectorY = targetY - originalY;
+    const extendedTargetX = originalX + vectorX * 1.5;
+    const extendedTargetY = originalY + vectorY * 1.5;
+    
+    // Calculate distance between current and target positions
+    const distance = Math.sqrt(vectorX * vectorX + vectorY * vectorY);
+    
+    // Determine color based on distance
+    const arrowColor = getArrowColor(distance);
+    
+    // Draw arrow
+    drawArrow(ctx, originalX, originalY, extendedTargetX, extendedTargetY, arrowColor, 6);
+  });
+};
+
+// OutOfFrameWarning component
+const OutOfFrameWarning = () => (
+  <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50">
+    <div className="bg-white text-red-600 text-lg md:text-xl font-semibold px-6 py-3 rounded-lg shadow-lg animate-bounce">
+      Get in Frame
+    </div>
+  </div>
+);
+
 const TrainingPage = () => {
   const navigate = useNavigate();
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -14,10 +162,7 @@ const TrainingPage = () => {
   const [userLandmarks, setUserLandmarks] = useState(null);
   
   // Random seed for consistent random movements within a frame
-  const randomSeedRef = useRef(Array(33).fill().map(() => ({
-    x: Math.random() * 0.05 - 0.025,  // Random value between -0.025 and 0.025 (more noticeable)
-    y: Math.random() * 0.05 - 0.025
-  })));
+  const randomSeedRef = useRef(createRandomSeed());
   
   // Update random seed every 3 seconds for more visible, longer-lasting movements
   useEffect(() => {
@@ -38,7 +183,7 @@ const TrainingPage = () => {
       }
       
       randomSeedRef.current = newRandomValues;
-    }, 3000); // Update every 3 seconds instead of 500ms
+    }, 3000); // Update every 3 seconds
     
     return () => clearInterval(intervalId);
   }, []);
@@ -57,7 +202,7 @@ const TrainingPage = () => {
 
   // MediaPipe Pose setup
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !webcamRef.current) return;
 
     const pose = new poseDetection.Pose({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
@@ -73,237 +218,64 @@ const TrainingPage = () => {
 
     pose.onResults(onResults);
 
-    let camera;
-
-    if (webcamRef.current) {
-      camera = new Camera(webcamRef.current, {
-        onFrame: async () => {
-          await pose.send({ image: webcamRef.current });
-        },
-        width: 640,
-        height: 480
-      });
-      camera.start();
-    }
+    const camera = new Camera(webcamRef.current, {
+      onFrame: async () => {
+        await pose.send({ image: webcamRef.current });
+      },
+      width: 640,
+      height: 480
+    });
+    
+    camera.start();
 
     function onResults(results) {
       const canvas = canvasRef.current;
-      if (!canvas) return;
-      
-      const ctx = canvas.getContext('2d');
-
-      if (!results.poseLandmarks) {
+      if (!canvas || !results.poseLandmarks) {
         setOutOfFrame(true);
         return;
       }
-  
-      const visiblePoints = results.poseLandmarks.filter(
+      
+      const ctx = canvas.getContext('2d');
+      const landmarks = results.poseLandmarks;
+      
+      // Check if user is in frame
+      const visiblePoints = landmarks.filter(
         (landmark) => landmark.visibility > 0.6
       );
 
-      // You can tweak this threshold (e.g., at least 12 visible points)
       if (visiblePoints.length < 12) {
         setOutOfFrame(true);
       } else {
         setOutOfFrame(false);
       }
 
-      // Save user landmarks for reference
-      setUserLandmarks(results.poseLandmarks);
+      // Save user landmarks
+      setUserLandmarks(landmarks);
 
+      // Set canvas dimensions
       canvas.width = webcamRef.current.videoWidth;
       canvas.height = webcamRef.current.videoHeight;
 
+      // Clear canvas
       ctx.save();
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Draw user's detected pose (purple)
-      if (results.poseLandmarks) {
-        const landmarks = results.poseLandmarks;
-        
-        // Draw circles for body landmarks only
-        for (let i = 11; i < landmarks.length; i++) {
-          const x = landmarks[i].x * canvas.width;
-          const y = landmarks[i].y * canvas.height;
-
-          ctx.beginPath();
-          ctx.arc(x, y, 5, 0, 2 * Math.PI);
-          ctx.fillStyle = '#8b5cf6'; // purple
-          ctx.fill();
-        }
-
-        // Draw lines between body-only connections
-        POSE_CONNECTIONS.forEach(([i, j]) => {
-          if (i >= 11 && j >= 11) {
-            const p1 = landmarks[i];
-            const p2 = landmarks[j];
-
-            ctx.beginPath();
-            ctx.moveTo(p1.x * canvas.width, p1.y * canvas.height);
-            ctx.lineTo(p2.x * canvas.width, p2.y * canvas.height);
-            ctx.strokeStyle = '#a78bfa'; // lighter purple
-            ctx.lineWidth = 2;
-            ctx.stroke();
-          }
-        });
-
-        // Add text labels to show which body parts need correction
-        const correctJoints = [];
-        for (let i = 11; i < landmarks.length; i++) {
-          const random = randomSeedRef.current[i];
-          // If the deviation is significant, mark it for correction
-          if (Math.abs(random.x) > 0.02 || Math.abs(random.y) > 0.02) {
-            let jointName = "";
-            // Map joint index to a readable name
-            switch(i) {
-              case 11: jointName = "Left Shoulder"; break;
-              case 12: jointName = "Right Shoulder"; break;
-              case 13: jointName = "Left Elbow"; break;
-              case 14: jointName = "Right Elbow"; break;
-              case 15: jointName = "Left Wrist"; break;
-              case 16: jointName = "Right Wrist"; break;
-              case 23: jointName = "Left Hip"; break;
-              case 24: jointName = "Right Hip"; break;
-              case 25: jointName = "Left Knee"; break;
-              case 26: jointName = "Right Knee"; break;
-              case 27: jointName = "Left Ankle"; break;
-              case 28: jointName = "Right Ankle"; break;
-              default: continue;
-            }
-            correctJoints.push({
-              name: jointName,
-              index: i,
-              x: landmarks[i].x * canvas.width, 
-              y: (landmarks[i].y * canvas.height) - 15
-            });
-          }
-        }
-
-        // Draw reference skeleton (green) - using randomSeed data
-        if (results.poseLandmarks) {
-          const landmarks = results.poseLandmarks;
-          
-          // Draw circles for body landmarks only with random offsets
-          for (let i = 11; i < landmarks.length; i++) {
-            // Use random offsets
-            const random = randomSeedRef.current[i];
-            const offsetX = random.x;
-            const offsetY = random.y;
-            
-            const x = (landmarks[i].x + offsetX) * canvas.width; 
-            const y = (landmarks[i].y + offsetY) * canvas.height;
-
-            ctx.beginPath();
-            ctx.arc(x, y, 8, 0, 2 * Math.PI); // Larger circles (8px)
-            // Temporarily commented out the green reference joint dots
-            // ctx.fillStyle = '#22c55e'; // green
-            // ctx.fill();
-          }
-
-          // Draw lines between body-only connections for reference skeleton
-          POSE_CONNECTIONS.forEach(([i, j]) => {
-            if (i >= 11 && j >= 11) {
-              const p1 = landmarks[i];
-              const p2 = landmarks[j];
-              
-              if (p1 && p2) {
-                // Use random offsets
-                const random1 = randomSeedRef.current[i];
-                const random2 = randomSeedRef.current[j];
-                const offsetX1 = random1.x;
-                const offsetY1 = random1.y;
-                const offsetX2 = random2.x;
-                const offsetY2 = random2.y;
-                
-                ctx.beginPath();
-                // Apply displacement offsets to each point
-                ctx.moveTo((p1.x + offsetX1) * canvas.width, (p1.y + offsetY1) * canvas.height);
-                ctx.lineTo((p2.x + offsetX2) * canvas.width, (p2.y + offsetY2) * canvas.height);
-                // Temporarily commented out the green reference skeleton lines
-                // ctx.strokeStyle = '#4ade80'; // lighter green
-                // ctx.lineWidth = 3; // Thicker lines (3px)
-                // ctx.stroke();
-              }
-            }
-          });
-          
-          // Draw arrows for correction hints
-          correctJoints.forEach(joint => {
-            // Find the original and target positions for the joint
-            const i = joint.index;
-            const originalX = landmarks[i].x * canvas.width;
-            const originalY = landmarks[i].y * canvas.height;
-            
-            // Calculate target position using random offsets
-            const random = randomSeedRef.current[i];
-            const offsetX = random.x;
-            const offsetY = random.y;
-            
-            const targetX = (landmarks[i].x + offsetX) * canvas.width;
-            const targetY = (landmarks[i].y + offsetY) * canvas.height;
-            
-            // Calculate extended target point (30% longer)
-            const vectorX = targetX - originalX;
-            const vectorY = targetY - originalY;
-            const extendedTargetX = originalX + vectorX * 1.5;
-            const extendedTargetY = originalY + vectorY * 1.5;
-            
-            // Calculate distance between current and target positions (before extension)
-            const distance = Math.sqrt(vectorX * vectorX + vectorY * vectorY);
-            
-            // Determine color based on distance (yellow -> orange -> red)
-            let arrowColor;
-            if (distance < 15) {
-              arrowColor = '#eab308'; // yellow
-            } else if (distance < 30) {
-              arrowColor = '#f97316'; // orange
-            } else {
-              arrowColor = '#ef4444'; // red
-            }
-            
-            // Draw arrow from current position to extended target position
-            drawArrow(ctx, originalX, originalY, extendedTargetX, extendedTargetY, arrowColor, 6);
-            
-            // Optionally add text labels (can be removed if not needed)
-            // ctx.font = '14px Arial';
-            // ctx.fillStyle = '#ef4444'; // red text
-            // ctx.fillText(`${joint.name}`, joint.x, joint.y);
-          });
-        }
-      }
+      // Draw user pose
+      drawUserPose(ctx, landmarks, canvas.width, canvas.height);
+      
+      // Find joints that need correction
+      const jointsToCorrect = findJointsToCorrect(landmarks, randomSeedRef.current);
+      
+      // Draw correction arrows
+      drawCorrectionArrows(ctx, landmarks, randomSeedRef.current, jointsToCorrect, canvas.width, canvas.height);
 
       ctx.restore();
     }
 
     return () => {
-      if (camera) camera.stop();
+      camera.stop();
     };
   }, []);
-
-  // Function to draw an arrow
-  function drawArrow(ctx, fromX, fromY, toX, toY, color, lineWidth) {
-    const headLength = 15; // increased length of arrow head
-    const dx = toX - fromX;
-    const dy = toY - fromY;
-    const angle = Math.atan2(dy, dx);
-    
-    // Draw line
-    ctx.beginPath();
-    ctx.moveTo(fromX, fromY);
-    ctx.lineTo(toX, toY);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = lineWidth;
-    ctx.stroke();
-    
-    // Draw arrowhead
-    ctx.beginPath();
-    ctx.moveTo(toX, toY);
-    ctx.lineTo(toX - headLength * Math.cos(angle - Math.PI/6), toY - headLength * Math.sin(angle - Math.PI/6));
-    ctx.lineTo(toX - headLength * Math.cos(angle + Math.PI/6), toY - headLength * Math.sin(angle + Math.PI/6));
-    ctx.closePath();
-    ctx.fillStyle = color;
-    ctx.fill();
-  }
 
   return (
     <section className={`overflow-scroll fixed inset-0 ${isDarkMode ? 'bg-gradient-to-br from-gray-800 to-indigo-500' : 'bg-gradient-to-br from-gray-100 to-indigo-500'}`}>
@@ -311,13 +283,7 @@ const TrainingPage = () => {
       <main>
         <div className="max-w-4xl mx-auto mt-2 bg-white dark:bg-gray-900 rounded-lg shadow-md overflow-hidden p-4">
           <div className="relative w-full aspect-video">
-            {outOfFrame && (
-              <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50">
-                <div className="bg-white text-red-600 text-lg md:text-xl font-semibold px-6 py-3 rounded-lg shadow-lg animate-bounce">
-                  Get in Frame
-                </div>
-              </div>
-            )}
+            {outOfFrame && <OutOfFrameWarning />}
             <video 
               ref={webcamRef} 
               className="absolute top-0 left-0 w-full h-full object-cover" 
