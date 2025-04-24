@@ -13,6 +13,8 @@ const createRandomSeed = () => {
   }));
 };
 
+const jointsToHide = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 17, 18, 19, 20, 21, 22, 29, 30, 31, 32]; // Example: head and face joints
+
 const getJointName = (index) => {
   switch(index) {
     case 11: return "Left Shoulder";
@@ -68,7 +70,8 @@ const drawArrow = (ctx, fromX, fromY, toX, toY, color, lineWidth) => {
 // Drawing functions
 const drawUserPose = (ctx, landmarks, canvasWidth, canvasHeight) => {
   // Draw circles for body landmarks only
-  for (let i = 11; i < landmarks.length; i++) {
+  for (let i = 0; i < landmarks.length; i++) {
+    if (!jointsToHide.includes(i)) {
     const x = landmarks[i].x * canvasWidth;
     const y = landmarks[i].y * canvasHeight;
 
@@ -76,11 +79,11 @@ const drawUserPose = (ctx, landmarks, canvasWidth, canvasHeight) => {
     ctx.arc(x, y, 5, 0, 2 * Math.PI);
     ctx.fillStyle = '#8b5cf6'; // purple
     ctx.fill();
-  }
+  }}
 
   // Draw lines between body-only connections
   POSE_CONNECTIONS.forEach(([i, j]) => {
-    if (i >= 11 && j >= 11) {
+    if (!jointsToHide.includes(i) && !jointsToHide.includes(j))  {
       const p1 = landmarks[i];
       const p2 = landmarks[j];
 
@@ -97,7 +100,8 @@ const drawUserPose = (ctx, landmarks, canvasWidth, canvasHeight) => {
 const findJointsToCorrect = (landmarks, randomSeed) => {
   const correctJoints = [];
   
-  for (let i = 11; i < landmarks.length; i++) {
+  for (let i = 0; i < landmarks.length; i++) {
+    if (!jointsToHide.includes(i)) {
     const random = randomSeed[i];
     // If the deviation is significant, mark it for correction
     if (Math.abs(random.x) > 0.02 || Math.abs(random.y) > 0.02) {
@@ -109,7 +113,7 @@ const findJointsToCorrect = (landmarks, randomSeed) => {
         });
       }
     }
-  }
+  }}
   
   return correctJoints;
 };
@@ -239,11 +243,15 @@ const TrainingPage = () => {
       const landmarks = results.poseLandmarks;
       
       // Check if user is in frame
-      const visiblePoints = landmarks.filter(
-        (landmark) => landmark.visibility > 0.6
-      );
+      const visiblePoints = results.poseLandmarks
+        .map((landmark, index) => ({ ...landmark, index }))
+        .filter(
+          (landmark) =>
+            landmark.visibility > 0.6 && !jointsToHide.includes(landmark.index)
+        );
 
-      if (visiblePoints.length < 12) {
+      // You can tweak this threshold (e.g., at least 12 visible points)
+      if (visiblePoints.length < 1) { // I Set it to 1 for now, just to test
         setOutOfFrame(true);
       } else {
         setOutOfFrame(false);
