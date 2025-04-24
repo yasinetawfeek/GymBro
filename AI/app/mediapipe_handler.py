@@ -16,7 +16,7 @@ import random as rand
 class MediaPipeHandler():
     def __init__(self):
         print("current OS working directory is",os.getcwd())
-        self.model_path = "/Users/yasinetawfeek/Developer/DesD_AI_pathway/AI/app/pose_landmarker_full.task" 
+        self.model_path = "/Users/dongyiuwu/Documents/Software Development/DesD_AI_pathway/AI/pose_landmarker_full.task" 
         # self.model_path=os.path.join("app", "pose_landmarker_full.task")
 
         base_options = python.BaseOptions(model_asset_path=self.model_path)
