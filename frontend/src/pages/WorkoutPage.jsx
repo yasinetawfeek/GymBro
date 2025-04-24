@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import * as poseDetection from '@mediapipe/pose';
 import { POSE_CONNECTIONS } from '@mediapipe/pose';
 import { Camera } from '@mediapipe/camera_utils';
-import { io } from 'socket.io-client';
 
 const TrainingPage = () => {
   const navigate = useNavigate();
@@ -13,12 +12,6 @@ const TrainingPage = () => {
   const canvasRef = useRef(null);
   const [outOfFrame, setOutOfFrame] = useState(false);
   const [userLandmarks, setUserLandmarks] = useState(null);
-  const [prediction, setPrediction] = useState(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const socketRef = useRef(null);
-  const [predictions, setPredictions] = useState([]);
-  const [connectionError, setConnectionError] = useState(null);
-  const [displacementData, setDisplacementData] = useState(null);
   
   // Random seed for consistent random movements within a frame
   const randomSeedRef = useRef(Array(33).fill().map(() => ({
@@ -48,65 +41,6 @@ const TrainingPage = () => {
     }, 3000); // Update every 3 seconds instead of 500ms
     
     return () => clearInterval(intervalId);
-  }, []);
-
-  // Connect to WebSocket server
-  useEffect(() => {
-    // Connect to WebSocket server
-    try {
-      socketRef.current = io('http://localhost:8001');
-      
-      socketRef.current.on('connect', () => {
-        console.log('Connected to WebSocket server');
-        setIsConnected(true);
-        setConnectionError(null);
-      });
-      
-      socketRef.current.on('disconnect', () => {
-        console.log('Disconnected from WebSocket server');
-        setIsConnected(false);
-        setConnectionError("Disconnected from server");
-      });
-      
-      socketRef.current.on('connect_error', (error) => {
-        console.error('Connection error:', error);
-        setIsConnected(false);
-        setConnectionError(`Connection error: ${error.message}`);
-      });
-      
-      // Listen for prediction results
-      socketRef.current.on('pose_prediction', (data) => {
-        console.log('Received prediction:', data);
-        setPrediction(data);
-        
-        // Store the displacement data
-        if (data.displacement) {
-          setDisplacementData(data.displacement);
-          console.log('Received displacement data:', data.displacement);
-        }
-        
-        // Add to predictions history (keep last 5)
-        setPredictions(prev => {
-          const newPredictions = [data, ...prev];
-          return newPredictions.slice(0, 5);
-        });
-      });
-      
-      socketRef.current.on('error', (data) => {
-        console.error('WebSocket error:', data.message);
-        setConnectionError(`Error: ${data.message}`);
-      });
-    } catch (error) {
-      console.error('Error setting up socket connection:', error);
-      setConnectionError(`Failed to connect: ${error.message}`);
-    }
-    
-    // Clean up on unmount
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-      }
-    };
   }, []);
 
   // Dark mode setup
@@ -172,13 +106,6 @@ const TrainingPage = () => {
         setOutOfFrame(true);
       } else {
         setOutOfFrame(false);
-        
-        // Send pose data to server if connected
-        if (socketRef.current && isConnected) {
-          socketRef.current.emit('pose_frame', {
-            landmarks: results.poseLandmarks
-          });
-        }
       }
 
       // Save user landmarks for reference
@@ -252,26 +179,16 @@ const TrainingPage = () => {
           }
         }
 
-        // Draw reference skeleton (green) - using displacement data if available
+        // Draw reference skeleton (green) - using randomSeed data
         if (results.poseLandmarks) {
           const landmarks = results.poseLandmarks;
           
-          // Draw circles for body landmarks only with displacement if available
+          // Draw circles for body landmarks only with random offsets
           for (let i = 11; i < landmarks.length; i++) {
-            // Use the displacement data from the model if available, otherwise fallback to random
-            let offsetX = 0;
-            let offsetY = 0;
-            
-            if (displacementData && displacementData[i]) {
-              // Use model-based displacement data
-              offsetX = displacementData[i].x;
-              offsetY = displacementData[i].y;
-            } else {
-              // Fallback to random offsets if no displacement data available
-              const random = randomSeedRef.current[i];
-              offsetX = random.x;
-              offsetY = random.y;
-            }
+            // Use random offsets
+            const random = randomSeedRef.current[i];
+            const offsetX = random.x;
+            const offsetY = random.y;
             
             const x = (landmarks[i].x + offsetX) * canvas.width; 
             const y = (landmarks[i].y + offsetY) * canvas.height;
@@ -290,24 +207,13 @@ const TrainingPage = () => {
               const p2 = landmarks[j];
               
               if (p1 && p2) {
-                // Use displacement data if available, otherwise fallback to random
-                let offsetX1 = 0, offsetY1 = 0, offsetX2 = 0, offsetY2 = 0;
-                
-                if (displacementData && displacementData[i] && displacementData[j]) {
-                  // Use model-based displacement data
-                  offsetX1 = displacementData[i].x;
-                  offsetY1 = displacementData[i].y;
-                  offsetX2 = displacementData[j].x;
-                  offsetY2 = displacementData[j].y;
-                } else {
-                  // Fallback to random offsets
-                  const random1 = randomSeedRef.current[i];
-                  const random2 = randomSeedRef.current[j];
-                  offsetX1 = random1.x;
-                  offsetY1 = random1.y;
-                  offsetX2 = random2.x;
-                  offsetY2 = random2.y;
-                }
+                // Use random offsets
+                const random1 = randomSeedRef.current[i];
+                const random2 = randomSeedRef.current[j];
+                const offsetX1 = random1.x;
+                const offsetY1 = random1.y;
+                const offsetX2 = random2.x;
+                const offsetY2 = random2.y;
                 
                 ctx.beginPath();
                 // Apply displacement offsets to each point
@@ -328,16 +234,10 @@ const TrainingPage = () => {
             const originalX = landmarks[i].x * canvas.width;
             const originalY = landmarks[i].y * canvas.height;
             
-            // Calculate target position using displacement data
-            let offsetX = 0, offsetY = 0;
-            if (displacementData && displacementData[i]) {
-              offsetX = displacementData[i].x;
-              offsetY = displacementData[i].y;
-            } else {
-              const random = randomSeedRef.current[i];
-              offsetX = random.x;
-              offsetY = random.y;
-            }
+            // Calculate target position using random offsets
+            const random = randomSeedRef.current[i];
+            const offsetX = random.x;
+            const offsetY = random.y;
             
             const targetX = (landmarks[i].x + offsetX) * canvas.width;
             const targetY = (landmarks[i].y + offsetY) * canvas.height;
@@ -378,7 +278,7 @@ const TrainingPage = () => {
     return () => {
       if (camera) camera.stop();
     };
-  }, [isConnected]);
+  }, []);
 
   // Function to draw an arrow
   function drawArrow(ctx, fromX, fromY, toX, toY, color, lineWidth) {
@@ -418,64 +318,19 @@ const TrainingPage = () => {
                 </div>
               </div>
             )}
-            <video ref={webcamRef} className="absolute top-0 left-0 w-full h-full object-cover" autoPlay muted playsInline />
-            <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full" />
-            
-            {/* Status indicator */}
-            <div className="absolute top-2 right-2 flex items-center px-3 py-1 rounded-full text-xs bg-black/50 text-white">
-              <div className={`w-2 h-2 rounded-full mr-2 ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-              <span>
-                {isConnected ? 'AI Connected' : 'AI Disconnected'}
-              </span>
-            </div>
-            
-            {/* Prediction display */}
-            {prediction && (
-              <div className="absolute bottom-4 left-4 right-4 bg-black/70 text-white p-3 rounded-md">
-                <div className="font-semibold text-xl text-center">
-                  {prediction.exercise_name}
-                </div>
-                <div className="w-full bg-gray-700 h-2 rounded-full mt-2">
-                  <div 
-                    className="bg-green-500 h-2 rounded-full" 
-                    style={{ width: `${Math.round(prediction.confidence * 100)}%` }}
-                  ></div>
-                </div>
-                <div className="text-xs text-right mt-1 text-gray-300">
-                  Confidence: {Math.round(prediction.confidence * 100)}%
-                </div>
-              </div>
-            )}
-            
-            {/* Error message if connection fails */}
-            {connectionError && (
-              <div className="absolute top-10 left-4 right-4 bg-red-500/80 text-white p-2 rounded-md text-sm">
-                {connectionError}
-              </div>
-            )}
-          </div>
-          
-          {/* Prediction history */}
-          <div className="mt-4 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
-            <h3 className="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">Recent Predictions</h3>
-            {predictions.length > 0 ? (
-              <div className="space-y-2">
-                {predictions.map((pred, index) => (
-                  <div key={index} className="flex justify-between items-center text-xs p-2 bg-white dark:bg-gray-700 rounded">
-                    <span className="font-medium">{pred.exercise_name}</span>
-                    <span className={`px-2 py-0.5 rounded-full ${
-                      pred.confidence > 0.8 ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100' : 
-                      pred.confidence > 0.5 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100' :
-                      'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'
-                    }`}>
-                      {Math.round(pred.confidence * 100)}%
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-sm text-gray-500 dark:text-gray-400 italic">No predictions yet</div>
-            )}
+            <video 
+              ref={webcamRef} 
+              className="absolute top-0 left-0 w-full h-full object-cover" 
+              style={{ transform: 'scaleX(-1)' }}
+              autoPlay 
+              muted 
+              playsInline 
+            />
+            <canvas 
+              ref={canvasRef} 
+              className="absolute top-0 left-0 w-full h-full" 
+              style={{ transform: 'scaleX(-1)' }}
+            />
           </div>
         </div>
       </main>
