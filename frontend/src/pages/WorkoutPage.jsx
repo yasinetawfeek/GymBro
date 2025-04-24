@@ -245,6 +245,7 @@ const TrainingPage = () => {
             }
             correctJoints.push({
               name: jointName,
+              index: i,
               x: landmarks[i].x * canvas.width, 
               y: (landmarks[i].y * canvas.height) - 15
             });
@@ -277,8 +278,9 @@ const TrainingPage = () => {
 
             ctx.beginPath();
             ctx.arc(x, y, 8, 0, 2 * Math.PI); // Larger circles (8px)
-            ctx.fillStyle = '#22c55e'; // green
-            ctx.fill();
+            // Temporarily commented out the green reference joint dots
+            // ctx.fillStyle = '#22c55e'; // green
+            // ctx.fill();
           }
 
           // Draw lines between body-only connections for reference skeleton
@@ -311,18 +313,61 @@ const TrainingPage = () => {
                 // Apply displacement offsets to each point
                 ctx.moveTo((p1.x + offsetX1) * canvas.width, (p1.y + offsetY1) * canvas.height);
                 ctx.lineTo((p2.x + offsetX2) * canvas.width, (p2.y + offsetY2) * canvas.height);
-                ctx.strokeStyle = '#4ade80'; // lighter green
-                ctx.lineWidth = 3; // Thicker lines (3px)
-                ctx.stroke();
+                // Temporarily commented out the green reference skeleton lines
+                // ctx.strokeStyle = '#4ade80'; // lighter green
+                // ctx.lineWidth = 3; // Thicker lines (3px)
+                // ctx.stroke();
               }
             }
           });
           
-          // Add text labels for correction hints
-          ctx.font = '14px Arial';
-          ctx.fillStyle = '#ef4444'; // red text
+          // Draw arrows for correction hints
           correctJoints.forEach(joint => {
-            ctx.fillText(`Adjust ${joint.name}`, joint.x, joint.y);
+            // Find the original and target positions for the joint
+            const i = joint.index;
+            const originalX = landmarks[i].x * canvas.width;
+            const originalY = landmarks[i].y * canvas.height;
+            
+            // Calculate target position using displacement data
+            let offsetX = 0, offsetY = 0;
+            if (displacementData && displacementData[i]) {
+              offsetX = displacementData[i].x;
+              offsetY = displacementData[i].y;
+            } else {
+              const random = randomSeedRef.current[i];
+              offsetX = random.x;
+              offsetY = random.y;
+            }
+            
+            const targetX = (landmarks[i].x + offsetX) * canvas.width;
+            const targetY = (landmarks[i].y + offsetY) * canvas.height;
+            
+            // Calculate extended target point (30% longer)
+            const vectorX = targetX - originalX;
+            const vectorY = targetY - originalY;
+            const extendedTargetX = originalX + vectorX * 1.5;
+            const extendedTargetY = originalY + vectorY * 1.5;
+            
+            // Calculate distance between current and target positions (before extension)
+            const distance = Math.sqrt(vectorX * vectorX + vectorY * vectorY);
+            
+            // Determine color based on distance (yellow -> orange -> red)
+            let arrowColor;
+            if (distance < 15) {
+              arrowColor = '#eab308'; // yellow
+            } else if (distance < 30) {
+              arrowColor = '#f97316'; // orange
+            } else {
+              arrowColor = '#ef4444'; // red
+            }
+            
+            // Draw arrow from current position to extended target position
+            drawArrow(ctx, originalX, originalY, extendedTargetX, extendedTargetY, arrowColor, 6);
+            
+            // Optionally add text labels (can be removed if not needed)
+            // ctx.font = '14px Arial';
+            // ctx.fillStyle = '#ef4444'; // red text
+            // ctx.fillText(`${joint.name}`, joint.x, joint.y);
           });
         }
       }
@@ -335,6 +380,30 @@ const TrainingPage = () => {
     };
   }, [isConnected]);
 
+  // Function to draw an arrow
+  function drawArrow(ctx, fromX, fromY, toX, toY, color, lineWidth) {
+    const headLength = 15; // increased length of arrow head
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    const angle = Math.atan2(dy, dx);
+    
+    // Draw line
+    ctx.beginPath();
+    ctx.moveTo(fromX, fromY);
+    ctx.lineTo(toX, toY);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+    
+    // Draw arrowhead
+    ctx.beginPath();
+    ctx.moveTo(toX, toY);
+    ctx.lineTo(toX - headLength * Math.cos(angle - Math.PI/6), toY - headLength * Math.sin(angle - Math.PI/6));
+    ctx.lineTo(toX - headLength * Math.cos(angle + Math.PI/6), toY - headLength * Math.sin(angle + Math.PI/6));
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
 
   return (
     <section className={`overflow-scroll fixed inset-0 ${isDarkMode ? 'bg-gradient-to-br from-gray-800 to-indigo-500' : 'bg-gradient-to-br from-gray-100 to-indigo-500'}`}>
