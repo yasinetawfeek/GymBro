@@ -88,7 +88,31 @@ const drawCorrectionArrows = (ctx, landmarks, corrections, jointsToCorrect, canv
 
 // --- UI Components (Unchanged) ---
 const OutOfFrameWarning = () => ( <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50 pointer-events-none"><div className="bg-white text-red-600 text-lg md:text-xl font-semibold px-6 py-3 rounded-lg shadow-lg animate-bounce">Get in Frame</div></div> );
-const ConnectionStatus = ({ status }) => { const statusColors = { connected: "bg-green-500", connecting: "bg-yellow-500", disconnected: "bg-red-500" }; return ( <div className="absolute top-4 right-4 flex items-center space-x-2 z-40"><div className={`w-4 h-4 rounded-full ${statusColors[status]}`}></div><span className="text-xs font-medium text-white bg-black/30 px-2 py-1 rounded">{status === "connected" ? "Connected" : status === "connecting" ? "Connecting..." : "Disconnected"}</span></div> ); };
+const ConnectionStatus = ({ status }) => { 
+  const statusColors = { connected: "bg-green-500", connecting: "bg-yellow-500", disconnected: "bg-red-500" }; 
+  return ( <div className="absolute top-4 right-4 flex items-center space-x-2 z-40"><div className={`w-4 h-4 rounded-full ${statusColors[status]}`}></div><span className="text-xs font-medium text-white bg-black/30 px-2 py-1 rounded">{status === "connected" ? "Connected" : status === "connecting" ? "Connecting..." : "Disconnected"}</span></div> ); 
+};
+
+// Add new Fullscreen Button component
+const FullscreenButton = ({ isFullscreen, toggleFullscreen }) => {
+  return (
+    <button 
+      onClick={toggleFullscreen}
+      className="absolute top-4 left-4 z-40 bg-black/40 hover:bg-black/60 text-white p-2 rounded-lg transition-colors"
+      title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+    >
+      {isFullscreen ? (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M5 4a1 1 0 00-1 1v4a1 1 0 01-1 1H2a1 1 0 110-2h.59L1.3 6.7a1 1 0 111.4-1.4L4 6.59V6a1 1 0 011-1h4a1 1 0 110 2H7a1 1 0 01-1-1V4zM16 4a1 1 0 00-1 1v1a1 1 0 01-1 1h-2a1 1 0 110-2h.59l-1.3-1.3a1 1 0 111.42-1.4L14 3.59V4a1 1 0 011-1h1a1 1 0 010 2v-1zM15 12a1 1 0 011-1h1a1 1 0 110 2h-1a1 1 0 01-1-1v-1zM5 16a1 1 0 001 1h4a1 1 0 100-2H7.41l1.3-1.3a1 1 0 00-1.42-1.4L6 13.59V14a1 1 0 01-1 1H4a1 1 0 100 2h1z" clipRule="evenodd" />
+        </svg>
+      ) : (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 01-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V6.414l-2.293 2.293a1 1 0 11-1.414-1.414L13.586 5H12zm-9 7a1 1 0 012 0v1.586l2.293-2.293a1 1 0 111.414 1.414L6.414 15H8a1 1 0 010 2H4a1 1 0 01-1-1v-4zm13-1a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 010-2h1.586l-2.293-2.293a1 1 0 111.414-1.414L15 13.586V12a1 1 0 011-1z" clipRule="evenodd" />
+        </svg>
+      )}
+    </button>
+  );
+};
 
 // --- Main TrainingPage Component ---
 const TrainingPage = () => {
@@ -110,6 +134,36 @@ const TrainingPage = () => {
   const poseInstanceRef = useRef(null);
   const cameraInstanceRef = useRef(null);
   const sendIntervalRef = useRef(null);
+  // Add state for tracking fullscreen
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Add function to toggle fullscreen
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      // Enter fullscreen
+      document.documentElement.requestFullscreen().catch(err => {
+        console.error(`Error attempting to enable fullscreen: ${err.message}`);
+      });
+    } else {
+      // Exit fullscreen
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  };
+
+  // Add event listener for fullscreen change
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
 
   // --- WebSocket Connection Setup ---
   useEffect(() => {
@@ -312,19 +366,30 @@ const TrainingPage = () => {
     };
   }, []); // Empty dependency array
 
+  // Add fullscreen styles to be applied conditionally
+  const fullscreenStyles = {
+    container: isFullscreen ? "fixed inset-0 z-50 bg-black m-0 p-0 max-w-none rounded-none" : "max-w-4xl mx-auto mt-2 bg-white dark:bg-gray-900 rounded-lg shadow-md overflow-hidden p-4",
+    videoContainer: isFullscreen ? "w-screen h-screen" : "relative w-full aspect-video",
+    infoPanel: isFullscreen ? "absolute bottom-4 left-0 right-0 bg-black/50 text-white px-4 py-2 rounded-none" : "mt-4 text-center text-sm text-gray-700 dark:text-gray-300"
+  };
+
   // --- Render ---
   return (
-    <section className={`overflow-hidden fixed inset-0 ${isDarkMode ? 'bg-gradient-to-br from-gray-800 to-indigo-500' : 'bg-gradient-to-br from-gray-100 to-indigo-500'}`}>
+    <section className={`overflow-hidden ${isFullscreen ? 'fixed inset-0 bg-black' : 'fixed inset-0'} ${isDarkMode && !isFullscreen ? 'bg-gradient-to-br from-gray-800 to-indigo-500' : !isFullscreen ? 'bg-gradient-to-br from-gray-100 to-indigo-500' : ''}`}>
       {/* <NavBar isDarkMode={isDarkMode} /> */}
-      <main>
-        <div className="max-w-4xl mx-auto mt-2 bg-white dark:bg-gray-900 rounded-lg shadow-md overflow-hidden p-4">
-          <div className="relative w-full aspect-video">
+      <main className={isFullscreen ? "h-full" : ""}>
+        <div className={fullscreenStyles.container}>
+          <div className={fullscreenStyles.videoContainer}>
             {outOfFrame && <OutOfFrameWarning />}
             <ConnectionStatus status={connectionStatus} />
+            <FullscreenButton isFullscreen={isFullscreen} toggleFullscreen={toggleFullscreen} />
             <video
               ref={webcamRef}
               className="absolute top-0 left-0 w-full h-full object-cover rounded-lg"
-              style={{ transform: 'scaleX(-1)' }}
+              style={{ 
+                transform: 'scaleX(-1)',
+                borderRadius: isFullscreen ? '0' : undefined 
+              }}
               autoPlay muted playsInline
               onLoadedData={() => console.log("[Video Event] Video metadata loaded.")}
               onError={(e) => console.error("[Video Event] Video error:", e)}
@@ -332,17 +397,20 @@ const TrainingPage = () => {
             <canvas
               ref={canvasRef}
               className="absolute top-0 left-0 w-full h-full rounded-lg"
-              style={{ transform: 'scaleX(-1)' }}
+              style={{ 
+                transform: 'scaleX(-1)',
+                borderRadius: isFullscreen ? '0' : undefined 
+              }}
             />
           </div>
-          <div className="mt-4 text-center text-sm text-gray-700 dark:text-gray-300">
-            <p>Workout Type: Barbell Bicep Curl</p>
+          <div className={fullscreenStyles.infoPanel}>
+            <p>Workout Type: {isFullscreen ? 'Plank' : 'Barbell Bicep Curl'}</p>
             {(feedbackLatency > 0 || receivedCount > 0) && (
-              <p className="mt-1 text-xs">
+              <p className={`${isFullscreen ? '' : 'mt-1'} text-xs`}>
                 Latency: {feedbackLatency > 0 ? `${feedbackLatency}ms` : 'N/A'} | Corrections: {receivedCount}
               </p>
             )}
-             <p className="mt-1 text-xs">Socket: {connectionStatus}</p>
+            <p className={`${isFullscreen ? '' : 'mt-1'} text-xs`}>Socket: {connectionStatus}</p>
           </div>
         </div>
       </main>
