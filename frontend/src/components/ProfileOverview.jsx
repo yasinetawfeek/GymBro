@@ -4,7 +4,7 @@ import { Edit3, Save, Trash2, Eye } from 'lucide-react';
 import ProfileSection from './ProfileSection';
 import UserDetailModal from './UserDetailModal';
 
-const ProfileOverview = ({ userData, setUserData, isEditing, setIsEditing, icons }) => {
+const ProfileOverview = ({ userData, setUserData, isEditing, setIsEditing, icons, isDarkMode = true }) => {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [localUserData, setLocalUserData] = useState({...userData});
   const [isSaving, setIsSaving] = useState(false);
@@ -70,7 +70,7 @@ const ProfileOverview = ({ userData, setUserData, isEditing, setIsEditing, icons
   if (!userData) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-gray-400">User data is not available</p>
+        <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>User data is not available</p>
       </div>
     );
   }
@@ -125,6 +125,7 @@ const ProfileOverview = ({ userData, setUserData, isEditing, setIsEditing, icons
           icons={icons} 
           isEditing={isEditing}
           onFieldChange={(field, value) => handleFieldChange('basicInfo', field, value)}
+          isDarkMode={isDarkMode}
         />
         <ProfileSection 
           title="FitnessProfile" 
@@ -132,6 +133,7 @@ const ProfileOverview = ({ userData, setUserData, isEditing, setIsEditing, icons
           icons={icons} 
           isEditing={isEditing}
           onFieldChange={(field, value) => handleFieldChange('fitnessProfile', field, value)}
+          isDarkMode={isDarkMode}
         />
         <ProfileSection 
           title="Preferences" 
@@ -139,6 +141,7 @@ const ProfileOverview = ({ userData, setUserData, isEditing, setIsEditing, icons
           icons={icons} 
           isEditing={isEditing}
           onFieldChange={(field, value) => handleFieldChange('preferences', field, value)}
+          isDarkMode={isDarkMode}
         />
         <ProfileSection 
           title="Achievements" 
@@ -146,6 +149,7 @@ const ProfileOverview = ({ userData, setUserData, isEditing, setIsEditing, icons
           icons={icons} 
           isEditing={isEditing}
           onFieldChange={(field, value) => handleFieldChange('achievements', field, value)}
+          isDarkMode={isDarkMode}
         />
       </div>
 

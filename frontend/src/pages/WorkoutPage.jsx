@@ -8,6 +8,9 @@ import { POSE_CONNECTIONS } from '@mediapipe/pose';
 import { Camera } from '@mediapipe/camera_utils';
 import io from 'socket.io-client';
 
+// Uncomment NavBar import
+import NavBar from '../components/Navbar';
+
 // Add workout mapping (matching the backend)
 const workoutMap = { 
   0: "Barbell Bicep Curl", 
@@ -301,7 +304,13 @@ const TrainingPage = () => {
     return () => clearInterval(checkCorrectionTimeout);
   }, [connectionStatus]);
 
-  // --- Dark Mode Setup (Unchanged) ---
+  // Add dark mode toggle functionality
+  // Add function to toggle dark mode
+  const toggleDarkMode = () => {
+    setIsDarkMode(!isDarkMode);
+  };
+
+  // Dark Mode Setup (Unchanged) ---
   useEffect(() => {
     const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
     setIsDarkMode(prefersDarkMode);
@@ -424,7 +433,7 @@ const TrainingPage = () => {
   // --- Render ---
   return (
     <section className={`overflow-hidden ${isFullscreen ? 'fixed inset-0 bg-black' : 'fixed inset-0'} ${isDarkMode && !isFullscreen ? 'bg-gradient-to-br from-gray-800 to-indigo-500' : !isFullscreen ? 'bg-gradient-to-br from-gray-100 to-indigo-500' : ''}`}>
-      {/* <NavBar isDarkMode={isDarkMode} /> */}
+      <NavBar isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />
       <main className={isFullscreen ? "h-full" : ""}>
         <div className={fullscreenStyles.container}>
           {/* Add workout selector before video container when not in fullscreen */}

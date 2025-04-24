@@ -17,9 +17,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from "react-router-dom";
 
 const AuthPage = () => {
-  console.log('auth page')
-  const { login, register, user } = useAuth();
-  console.log('error not in first useAuth')
+  const user = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,6 +25,7 @@ const AuthPage = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [generalError, setGeneralError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState({});
   
   const navigate = useNavigate();
 
@@ -46,26 +45,27 @@ const AuthPage = () => {
   }, [isDarkMode]);
 
   useEffect(() => {
-    if (user) navigate('/');
-  }, [user, navigate]);
+    if (user.user) navigate('/');
+  }, [user.user, navigate]);
 
   // Reset errors when switching between login and signup
   useEffect(() => {
     setGeneralError('');
+    setErrors({});
   }, [isLogin]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setGeneralError('');
+    setErrors({});
     setIsLoading(true);
   
     try {
       if (isLogin) {
-        await login(username, password);
-        console.log('loggedin')
+        await user.login(username, password);
         navigate('/');
       } else {
-        await register(email, username, password);
+        await user.register(email, username, password);
         setIsLogin(true);
         setGeneralError('Account created! Please log in.');
       }

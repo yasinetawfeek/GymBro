@@ -16,16 +16,23 @@ import UserDetailsPage from '../components/UserDetailsPage';
 
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
 const AccountManagement = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  
+  // Change this to match Navbar.jsx - don't destructure
+  const user = useAuth();
     
   // Check system preference on initial load
   useEffect(() => {
     const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
     setIsDarkMode(prefersDarkMode);
     
-  }, [navigate]);
+  }, []);
   
   // Update dark mode class on body
   useEffect(() => {
@@ -58,16 +65,15 @@ const AccountManagement = () => {
   });
 
   // Get user data and functions from auth context
-  const { user} = useAuth();
-  const navigate = useNavigate();
-
+  // Removed destructured { user }
+  
   // Determine user role from backend data
   const getUserRole = () => {
-    if (!user) return 'user';
+    if (!user.user) return 'user';
     
     // Check if the user has admin permissions
     // This might need to be adjusted based on how roles are stored in your backend
-    if (user.basicInfo?.isAdmin || user.basicInfo?.role === 'Admin') {
+    if (user.user.basicInfo?.isAdmin || user.user.basicInfo?.role === 'Admin') {
       return 'admin';
     }
     return 'user';
@@ -103,20 +109,46 @@ const AccountManagement = () => {
     points: Medal
   };
 
+  // Define the missing updateProfile function
+  const updateProfile = async (updatedData) => {
+    const API_URL = 'http://localhost:8000/';
+    try {
+      const response = await axios.patch(
+        `${API_URL}auth/users/me/`, 
+        updatedData,
+        {
+          headers: { 
+            Authorization: `Bearer ${localStorage.getItem('access_token')}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      // Update the user data in context if needed
+      return response.data;
+    } catch (error) {
+      console.error('Profile update error:', error);
+      throw error;
+    }
+  };
+
   // Handle the save action when profile is edited
   const handleProfileUpdate = async (updatedData) => {
     try {
+      setLoading(true);
       await updateProfile(updatedData);
       setIsEditing(false);
     } catch (err) {
       console.error('Failed to update profile:', err);
+      setError('Failed to update profile. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
   // Show loading spinner while user data is being fetched
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+      <div className={`min-h-screen flex items-center justify-center ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
       </div>
     );
@@ -127,27 +159,32 @@ const AccountManagement = () => {
       case 'profile':
         return (
           <ProfileOverview 
-            userData={user}
+            userData={user.user}
             setUserData={handleProfileUpdate}
             isEditing={isEditing}
             setIsEditing={setIsEditing}
             icons={icons}
+            isDarkMode={isDarkMode}
           />
         );
       case 'stats':
-        return <FitnessStats fitnessStats={fitnessStats} />;
+        return <FitnessStats fitnessStats={fitnessStats} isDarkMode={isDarkMode} />;
       case 'users':
-        return <UserManagement />;
+        return <UserManagement isDarkMode={isDarkMode} />;
       case 'userDetails':
-        return <UserDetailsPage />;
+        return <UserDetailsPage isDarkMode={isDarkMode} />;
       default:
         return <div>Page not found</div>;
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
-      <NavBar isDarkMode={isDarkMode} />
+    <div className={`min-h-screen ${
+      isDarkMode 
+        ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white' 
+        : 'bg-gradient-to-br from-gray-100 via-gray-200 to-gray-100 text-gray-900'
+    }`}>
+      <NavBar isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />
       <div className="max-w-6xl mx-auto px-4 py-6 relative">
         {error && (
           <div className="mb-4 bg-red-500/20 text-red-300 p-3 rounded-lg">
@@ -162,11 +199,16 @@ const AccountManagement = () => {
             userRole={userRole}
             activePage={activePage}
             setActivePage={setActivePage}
+            isDarkMode={isDarkMode}
           />
 
           <div className="lg:ml-72 flex-1">
             <motion.div 
-              className="rounded-xl backdrop-blur-sm bg-white/5 border border-white/5 p-6"
+              className={`rounded-xl ${
+                isDarkMode 
+                  ? 'backdrop-blur-sm bg-white/5 border border-white/5' 
+                  : 'bg-white shadow-md border border-gray-200'
+              } p-6`}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               key={activePage}
