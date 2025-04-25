@@ -29,20 +29,56 @@ export const AuthProvider = ({ children }) => {
     if (token) {
       console.log("AuthContext: Token found, fetching user data");
       setLoading(true);
-      axios
-        .get(`${API_URL}auth/users/me/`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        .then((res) => {
-          console.log("AuthContext: User data fetched successfully");
-          setUser(res.data);
-          setLoading(false);
-        })
-        .catch((err) => {
+      
+      // Fetch the user profile using the appropriate endpoint
+      const fetchUserData = async () => {
+        try {
+          // First try to get user data from auth endpoint
+          const authRes = await axios.get(`${API_URL}auth/users/me/`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          console.log("AuthContext: User auth data:", authRes.data);
+          
+          // Then get more detailed profile data from my_account endpoint
+          try {
+            const profileRes = await axios.get(`${API_URL}api/my_account/`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            
+            console.log("AuthContext: User profile data:", profileRes.data);
+            
+            // Check if the response already includes is_admin field (our serializer adds this)
+            const userData = {
+              ...authRes.data,
+              // Only add these properties if they don't already exist in the response
+              basicInfo: authRes.data.basicInfo || profileRes?.data?.basicInfo || {},
+            };
+            
+            // Log the final user data to check its structure
+            console.log("AuthContext: Final processed user data:", userData);
+            setUser(userData);
+          } catch (profileErr) {
+            console.warn("Could not fetch detailed profile, using auth data only", profileErr);
+            setUser({
+              ...authRes.data,
+              isAdmin: authRes.data.groups && authRes.data.groups.some(g => 
+                g.name === 'Admin' || g === 'Admin'
+              )
+            });
+          }
+        } catch (err) {
           console.error('Error fetching user:', err);
+          if (err.response) {
+            console.error('Response:', err.response.status, err.response.data);
+          }
           logout();
+        } finally {
           setLoading(false);
-        });
+        }
+      };
+      
+      fetchUserData();
     } else {
       // Make sure user is null when token is null
       console.log("AuthContext: No token, setting user to null");
@@ -127,7 +163,7 @@ export const useAuth = () => {
   }
   
   // Log each time useAuth is called to track where it's being used
-  console.log("useAuth called from component", { hasUser: !!context.user, isLoading: context.loading });
+  // console.log("useAuth called from component", { hasUser: !!context.user, isLoading: context.loading });
   
   return context;
 };

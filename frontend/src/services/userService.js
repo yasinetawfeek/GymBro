@@ -4,10 +4,25 @@ const { apiClient } = authService;
 
 // Get all users (admin only)
 const getAllUsers = async () => {
+  console.log("Calling getAllUsers API endpoint");
+  
   try {
+    // Get the current token
+    const token = localStorage.getItem('access_token');
+    console.log("Using token:", token ? `${token.substring(0, 10)}...` : 'No token');
+    
     const response = await apiClient.get('api/manage_accounts/');
+    console.log("getAllUsers success:", response);
     return response.data;
   } catch (error) {
+    console.error("getAllUsers error:", error);
+    if (error.response) {
+      console.error("Error details:", {
+        status: error.response.status,
+        data: error.response.data,
+        headers: error.response.headers
+      });
+    }
     throw error;
   }
 };
