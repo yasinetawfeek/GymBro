@@ -39,7 +39,7 @@ def mediapipe_format_dataset_handler(dataset_name):
         duplicate_noise = 4
         noise_intensity = 0.3
         for i in range(duplicate_noise):
-            train_with_noise = pd.concat([train_with_noise, media_pipe_handler.add_noise_to_df(train, noise_intensity, 10)], ignore_index=True) 
+            train_with_noise = pd.concat([train_with_noise, media_pipe_handler.add_noise_to_df(train, noise_intensity, 15)], ignore_index=True) 
             test_with_noise = pd.concat([test_with_noise, media_pipe_handler.add_noise_to_df(test, noise_intensity, 15)], ignore_index=True)
             validation_with_noise = pd.concat([validation_with_noise, media_pipe_handler.add_noise_to_df(validation, noise_intensity, 15)], ignore_index=True)
 
@@ -49,9 +49,9 @@ def mediapipe_format_dataset_handler(dataset_name):
         train_with_noise = train_with_noise.sample(frac=1).reset_index(drop=True)
         validation_with_noise = validation_with_noise.sample(frac=1).reset_index(drop=True)
 
-        train_with_noise.to_csv('/Users/yasinetawfeek/Developer/DesD_AI_pathway/AI/data/train_new.csv')
-        test_with_noise.to_csv('/Users/yasinetawfeek/Developer/DesD_AI_pathway/AI/data/test_new.csv')
-        validation_with_noise.to_csv('/Users/yasinetawfeek/Developer/DesD_AI_pathway/AI/data/validation_new.csv')
+        train_with_noise.to_csv('H:\\DesD_AI_pathway\\AI\\data\\train_new.csv')
+        test_with_noise.to_csv('H:\\DesD_AI_pathway\\AI\\data\\test_new.csv')
+        validation_with_noise.to_csv('H:\\DesD_AI_pathway\\AI\\data\\validation_new.csv')
 
     except Exception as e:
         print(f'Error processing dataset: {str(e)}')
