@@ -185,13 +185,12 @@ const NavBar = ({ isDarkMode, toggleDarkMode }) => {
               >
                 How It Works
               </a>
-              <a
+              {/* add /workout */}
+              <a>
                 href="/workout" 
                 className={`${isDarkMode ? 'text-white hover:text-purple-400' : 'text-gray-600 hover:text-indigo-500'} 
                   font-medium text-sm py-2 px-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors`}
                 onClick={() => setIsMenuOpen(false)}
-              >
-                Workout
               </a>
               
               {user.user ? (
