@@ -116,7 +116,6 @@ const drawCorrectionArrows = (ctx, landmarks, corrections, jointsToCorrect, canv
 };
 
 // --- UI Components (Unchanged) ---
-const OutOfFrameWarning = () => ( <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50 pointer-events-none"><div className="bg-white text-red-600 text-lg md:text-xl font-semibold px-6 py-3 rounded-lg shadow-lg animate-bounce">Get in Frame</div></div> );
 const ConnectionStatus = ({ status }) => { 
   const statusColors = { connected: "bg-green-500", connecting: "bg-yellow-500", disconnected: "bg-red-500" }; 
   return ( <div className="absolute top-4 right-4 flex items-center space-x-2 z-40"><div className={`w-4 h-4 rounded-full ${statusColors[status]}`}></div><span className="text-xs font-medium text-white bg-black/30 px-2 py-1 rounded">{status === "connected" ? "Connected" : status === "connecting" ? "Connecting..." : "Disconnected"}</span></div> ); 
@@ -166,7 +165,6 @@ const TrainingPage = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const webcamRef = useRef(null);
   const canvasRef = useRef(null);
-  const [outOfFrame, setOutOfFrame] = useState(false);
   const [userLandmarksForDrawing, setUserLandmarksForDrawing] = useState(null);
   const latestLandmarksRef = useRef(null);
   const [corrections, setCorrections] = useState({});
@@ -347,12 +345,6 @@ const TrainingPage = () => {
 
         if (results.poseLandmarks) {
             const landmarks = results.poseLandmarks;
-            const visiblePoints = landmarks.filter(lm => lm && lm.visibility && lm.visibility > 0.6);
-            if (visiblePoints.length < 12) {
-                if (!outOfFrame) setOutOfFrame(true);
-            } else {
-                if (outOfFrame) setOutOfFrame(false);
-            }
             updateLandmarks(landmarks); // Update ref and state
 
             // --- Drawing Logic ---
@@ -371,7 +363,6 @@ const TrainingPage = () => {
             // *** END Use the latestCorrectionsRef for drawing ***
 
         } else {
-            if (!outOfFrame) setOutOfFrame(true);
             updateLandmarks(null);
         }
         ctx.restore();
@@ -441,7 +432,6 @@ const TrainingPage = () => {
       <main className={isFullscreen ? "h-full" : ""}>
         <div className={fullscreenStyles.container}>
           <div className={fullscreenStyles.videoContainer}>
-            {outOfFrame && <OutOfFrameWarning />}
             <ConnectionStatus status={connectionStatus} />
             <FullscreenButton isFullscreen={isFullscreen} toggleFullscreen={toggleFullscreen} />
             <video
