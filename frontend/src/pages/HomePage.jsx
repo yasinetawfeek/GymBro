@@ -490,7 +490,6 @@ const Footer = ({ isDarkMode }) => {
             <ul className="space-y-3">
               <motion.li whileHover={{ x: 5 }}>
                 <a href="#features" className="text-gray-400 hover:text-purple-400 transition duration-300 flex items-center">
-                  <ChevronRight size={16} className="mr-1 opacity-0 group-hover:opacity-100" />
                   Features
                 </a>
               </motion.li>
