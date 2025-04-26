@@ -159,8 +159,8 @@ const WorkoutSelector = ({ selectedWorkout, onSelectWorkout, isFullscreen }) => 
   );
 };
 
-// --- Main WorkoutPage Component ---
-const WorkoutPage = () => {
+// --- Main TrainingPage Component ---
+const TrainingPage = () => {
   const navigate = useNavigate();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const webcamRef = useRef(null);
@@ -179,8 +179,8 @@ const WorkoutPage = () => {
   const cameraInstanceRef = useRef(null);
   const sendIntervalRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  // Add selected workout state
-  const [selectedWorkout, setSelectedWorkout] = useState(12); // Default to plank (12)
+  // Remove selected workout state and add predicted workout state
+  const [predictedWorkout, setPredictedWorkout] = useState(12); // Default to plank (12)
 
   // Add function to toggle fullscreen
   const toggleFullscreen = () => {
@@ -235,6 +235,11 @@ const WorkoutPage = () => {
         // Update state as well (might trigger other UI updates)
         setCorrections(data);
 
+        // Check if there's a predicted workout type in the data
+        if (data.predicted_workout_type !== undefined) {
+          setPredictedWorkout(data.predicted_workout_type);
+        }
+
         // Update timing info
         const now = Date.now();
         const latency = lastLandmarkUpdateRef.current ? now - lastLandmarkUpdateRef.current : 0;
@@ -272,16 +277,15 @@ const WorkoutPage = () => {
       const socketIsConnected = socketRef.current?.connected;
       if (landmarksToSend && socketIsConnected) {
         const sendTimestamp = Date.now();
-        // Updated to include selected workout
+        // Always send landmarks without a workout type, let backend predict it
         socketRef.current.emit('pose_data', { 
           landmarks: landmarksToSend, 
-          workout_type: selectedWorkout, // Send the selected workout type
           timestamp: sendTimestamp 
         });
       }
     }, sendIntervalDelay);
     return () => { if (sendIntervalRef.current) { console.log("[Data Send] Clearing send interval."); clearInterval(sendIntervalRef.current); sendIntervalRef.current = null; } };
-  }, [selectedWorkout]); // Add selectedWorkout as dependency to update when changed
+  }, []); // No dependencies needed now
 
   // --- Correction Timeout Check (Unchanged) ---
   useEffect(() => {
@@ -427,25 +431,9 @@ const WorkoutPage = () => {
       <NavBar isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />
       <main className={isFullscreen ? "h-full" : ""}>
         <div className={fullscreenStyles.container}>
-          {/* Add workout selector before video container when not in fullscreen */}
-          {!isFullscreen && (
-            <WorkoutSelector 
-              selectedWorkout={selectedWorkout} 
-              onSelectWorkout={setSelectedWorkout} 
-              isFullscreen={isFullscreen}
-            />
-          )}
           <div className={fullscreenStyles.videoContainer}>
             <ConnectionStatus status={connectionStatus} />
             <FullscreenButton isFullscreen={isFullscreen} toggleFullscreen={toggleFullscreen} />
-            {/* Add workout selector when in fullscreen mode */}
-            {isFullscreen && (
-              <WorkoutSelector 
-                selectedWorkout={selectedWorkout} 
-                onSelectWorkout={setSelectedWorkout} 
-                isFullscreen={isFullscreen}
-              />
-            )}
             <video
               ref={webcamRef}
               className="absolute top-0 left-0 w-full h-full object-cover rounded-lg"
@@ -467,7 +455,9 @@ const WorkoutPage = () => {
             />
           </div>
           <div className={fullscreenStyles.infoPanel}>
-            <p>Workout Type: {workoutMap[selectedWorkout]}</p>
+            <p>
+              Predicted Workout: <span className="font-semibold">{workoutMap[predictedWorkout]}</span>
+            </p>
             {(feedbackLatency > 0 || receivedCount > 0) && (
               <p className={`${isFullscreen ? '' : 'mt-1'} text-xs`}>
                 Latency: {feedbackLatency > 0 ? `${feedbackLatency}ms` : 'N/A'} | Corrections: {receivedCount}
@@ -481,4 +471,4 @@ const WorkoutPage = () => {
   );
 };
 
-export default WorkoutPage;
+export default TrainingPage;
