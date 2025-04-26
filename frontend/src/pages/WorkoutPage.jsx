@@ -179,8 +179,58 @@ const TrainingPage = () => {
   const cameraInstanceRef = useRef(null);
   const sendIntervalRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  // Remove selected workout state and add predicted workout state
+  
+  // Modified workout prediction state
   const [predictedWorkout, setPredictedWorkout] = useState(12); // Default to plank (12)
+  
+  // Add state for workout prediction stability
+  const [recentWorkoutPredictions, setRecentWorkoutPredictions] = useState([]);
+  const PREDICTION_WINDOW_SIZE = 30; // Keep track of ~1.5 seconds of predictions (at 50ms intervals)
+  const CONFIDENCE_THRESHOLD = 0.6; // 60% majority needed to change workout
+  const lastStableWorkoutRef = useRef(12); // Track the last stable workout type
+  // Add state to track overall confidence
+  const [predictionConfidence, setPredictionConfidence] = useState(0);
+
+  // Add new function to stabilize workout predictions
+  const updateStableWorkoutPrediction = (newPrediction) => {
+    // Update the array of recent predictions
+    setRecentWorkoutPredictions(prev => {
+      // Add new prediction and keep window size limited
+      const updated = [...prev, newPrediction].slice(-PREDICTION_WINDOW_SIZE);
+      
+      // Count occurrences of each workout type in our window
+      const counts = updated.reduce((acc, type) => {
+        acc[type] = (acc[type] || 0) + 1;
+        return acc;
+      }, {});
+      
+      // Find the most frequent workout type
+      let mostFrequent = null;
+      let highestCount = 0;
+      
+      Object.entries(counts).forEach(([type, count]) => {
+        if (count > highestCount) {
+          highestCount = count;
+          mostFrequent = Number(type);
+        }
+      });
+      
+      // Calculate confidence (percentage of window with this prediction)
+      const confidence = highestCount / updated.length;
+      
+      // Store the confidence value for UI display
+      setPredictionConfidence(confidence);
+      
+      // Only update the displayed workout if confidence passes threshold
+      // or if it's the same as our current stable workout
+      if (confidence >= CONFIDENCE_THRESHOLD || mostFrequent === lastStableWorkoutRef.current) {
+        setPredictedWorkout(mostFrequent);
+        lastStableWorkoutRef.current = mostFrequent;
+      }
+      
+      return updated;
+    });
+  };
 
   // Add function to toggle fullscreen
   const toggleFullscreen = () => {
@@ -227,9 +277,7 @@ const TrainingPage = () => {
 
       // --- MODIFIED CORRECTIONS HANDLER ---
       socketRef.current.on('pose_corrections', (data) => {
-        // console.log("[Socket Event] Raw data received for 'pose_corrections':", data); // Keep for debugging if needed
-
-        // *** Update the ref with the latest data immediately ***
+        // Update the ref with the latest data immediately
         latestCorrectionsRef.current = data;
 
         // Update state as well (might trigger other UI updates)
@@ -237,7 +285,8 @@ const TrainingPage = () => {
 
         // Check if there's a predicted workout type in the data
         if (data.predicted_workout_type !== undefined) {
-          setPredictedWorkout(data.predicted_workout_type);
+          // Instead of directly setting the workout, update our stable prediction
+          updateStableWorkoutPrediction(data.predicted_workout_type);
         }
 
         // Update timing info
@@ -456,7 +505,18 @@ const TrainingPage = () => {
           </div>
           <div className={fullscreenStyles.infoPanel}>
             <p>
-              Predicted Workout: <span className="font-semibold">{workoutMap[predictedWorkout]}</span>
+              {predictionConfidence < 0.7 ? (
+                <span className="font-semibold text-yellow-400">Start working out or position yourself in frame</span>
+              ) : (
+                <>
+                  Predicted Workout: <span className="font-semibold">{workoutMap[predictedWorkout]}</span>
+                  {recentWorkoutPredictions.length > 0 && (
+                    <span className="ml-2 text-xs opacity-75">
+                      (Confidence: {Math.round(predictionConfidence * 100)}%)
+                    </span>
+                  )}
+                </>
+              )}
             </p>
             {(feedbackLatency > 0 || receivedCount > 0) && (
               <p className={`${isFullscreen ? '' : 'mt-1'} text-xs`}>

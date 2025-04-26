@@ -366,7 +366,7 @@ const UserManagement = ({ isDarkMode = true, onSelectUser, onDeleteUser, onSaveU
         <AnimatePresence>
           {isLoading ? (
             <motion.div 
-              initial={{ opacity: 0 }}
+              initial={{ opacity: 1 }}
               animate={{ opacity: 1 }}
               className="flex justify-center items-center py-20"
             >
