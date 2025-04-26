@@ -7,6 +7,9 @@ import * as poseDetection from '@mediapipe/pose';
 import { POSE_CONNECTIONS } from '@mediapipe/pose';
 import { Camera } from '@mediapipe/camera_utils';
 import io from 'socket.io-client';
+// Import React Body Highlighter
+import Model from 'react-body-highlighter';
+import { MuscleType, ModelType } from 'react-body-highlighter';
 
 // Uncomment NavBar import
 import NavBar from '../components/Navbar';
@@ -35,6 +38,17 @@ const workoutMap = {
   19: "T Bar Row", 
   20: "Tricep Dips", 
   21: "Tricep Pushdown"
+};
+
+// Define muscle group mapping
+const muscleGroupMap = {
+  1: "shoulders",
+  2: "chest",
+  3: "biceps",
+  4: "core",
+  5: "triceps",
+  6: "legs",
+  7: "back"
 };
 
 // --- Utility functions (Unchanged) ---
@@ -159,6 +173,63 @@ const WorkoutSelector = ({ selectedWorkout, onSelectWorkout, isFullscreen }) => 
   );
 };
 
+// New MuscleGroupVisualizer component
+const MuscleGroupVisualizer = ({ isVisible, isFullscreen }) => {
+  // Format data for React Body Highlighter - activate biceps
+  const muscleData = [
+    { name: 'Bicep Curl', muscles: [MuscleType.BICEPS] },
+    { name: 'Tricep Pushdown', muscles: [MuscleType.TRICEPS] },
+    { name: 'Lat Pulldown', muscles: [MuscleType.BACK_DELTOIDS, MuscleType.LOWER_BACK, MuscleType.UPPER_BACK] },
+  ];
+
+  return isVisible ? (
+    <>
+      {/* Front view - Left side */}
+      <div className={`absolute ${isFullscreen ? 'bottom-20 left-8' : 'bottom-20 left-4'} z-30 pointer-events-none w-[120px] sm:w-[180px] lg:w-[200px] max-w-[30vw]`}>
+        <Model 
+          data={muscleData}
+          type={ModelType.ANTERIOR}
+          highlightedColors={['#e65a5a']}
+          onClick={() => {}} // Empty handler to prevent errors
+        />
+      </div>
+      
+      {/* Back view - Right side */}
+      <div className={`absolute ${isFullscreen ? 'bottom-20 right-8' : 'bottom-20 right-4'} z-30 pointer-events-none w-[120px] sm:w-[180px] lg:w-[200px] max-w-[30vw]`}>
+        <Model 
+          data={muscleData}
+          type={ModelType.POSTERIOR}
+          highlightedColors={['#e65a5a']}
+          onClick={() => {}} // Empty handler to prevent errors
+        />
+      </div>
+    </>
+  ) : null;
+};
+
+// Add toggle button for muscle visualization
+const MuscleVisualizerToggle = ({ isVisible, toggleVisibility, isFullscreen }) => {
+  return (
+    <button 
+      onClick={toggleVisibility}
+      className={`absolute ${isFullscreen ? 'bottom-4 right-8' : 'bottom-4 right-4'} z-40 bg-black/40 hover:bg-black/60 text-white p-2 rounded-lg transition-colors`}
+      title={isVisible ? "Hide Muscle Activation" : "Show Muscle Activation"}
+    >
+      {isVisible ? (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+        </svg>
+      ) : (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M5 4a1 1 0 00-1 1v10a1 1 0 001 1h10a1 1 0 001-1V5a1 1 0 00-1-1H5zm0 2h10v8H5V6z" clipRule="evenodd" />
+          <path d="M7 9a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1z" />
+          <path d="M7 12a1 1 0 011-1h2a1 1 0 110 2H8a1 1 0 01-1-1z" />
+        </svg>
+      )}
+    </button>
+  );
+};
+
 // --- Main TrainingPage Component ---
 const TrainingPage = () => {
   const navigate = useNavigate();
@@ -179,6 +250,9 @@ const TrainingPage = () => {
   const cameraInstanceRef = useRef(null);
   const sendIntervalRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  // Add state for muscle visualizer toggle
+  const [showMuscleVisualizer, setShowMuscleVisualizer] = useState(true);
   
   // Modified workout prediction state
   const [predictedWorkout, setPredictedWorkout] = useState(12); // Default to plank (12)
@@ -474,6 +548,11 @@ const TrainingPage = () => {
     infoPanel: isFullscreen ? "absolute bottom-4 left-0 right-0 bg-black/50 text-white px-4 py-2 rounded-none" : "mt-4 text-center text-sm text-gray-700 dark:text-gray-300"
   };
 
+  // Add function to toggle muscle visualizer
+  const toggleMuscleVisualizer = () => {
+    setShowMuscleVisualizer(!showMuscleVisualizer);
+  };
+
   // --- Render ---
   return (
     <section className={`overflow-hidden ${isFullscreen ? 'fixed inset-0 bg-black' : 'fixed inset-0'} ${isDarkMode && !isFullscreen ? 'bg-gradient-to-br from-gray-800 to-indigo-500' : !isFullscreen ? 'bg-gradient-to-br from-gray-100 to-indigo-500' : ''}`}>
@@ -501,6 +580,14 @@ const TrainingPage = () => {
                 transform: 'scaleX(-1)',
                 borderRadius: isFullscreen ? '0' : undefined 
               }}
+            />
+            
+            {/* Add Muscle Group Visualizer */}
+            <MuscleGroupVisualizer isVisible={showMuscleVisualizer} isFullscreen={isFullscreen} />
+            <MuscleVisualizerToggle 
+              isVisible={showMuscleVisualizer} 
+              toggleVisibility={toggleMuscleVisualizer} 
+              isFullscreen={isFullscreen}
             />
           </div>
           <div className={fullscreenStyles.infoPanel}>
