@@ -5,3 +5,4 @@ env.bak/
 venv.bak/
 node_modules
 .env
+frontend/yarn.lock
