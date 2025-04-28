@@ -23,6 +23,7 @@ from flask_socketio import SocketIO, emit
 import json
 import time
 from datetime import datetime # Import datetime for formatted timestamp
+from sklearn.preprocessing import StandardScaler # Added for feature scaling
 
 # --- DNN model class definition (Unchanged) ---
 class EnhancedPoseModel(nn.Module):
@@ -51,6 +52,46 @@ class EnhancedPoseModel(nn.Module):
         # Model outputs values in range [-0.1, 0.1]
         return self.net(x) * 0.1
 
+# --- LSTM Workout Classifier model definition (NEW) ---
+class LSTMWorkoutClassifier(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, num_classes, dropout=0.2):
+        super(LSTMWorkoutClassifier, self).__init__()
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        
+        # LSTM layers
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, 
+                           batch_first=True, dropout=dropout if num_layers > 1 else 0)
+        
+        # Fully connected layers
+        self.fc1 = nn.Linear(hidden_size, 128)
+        self.dropout = nn.Dropout(dropout)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(128, num_classes)
+        
+    def forward(self, x):
+        # Reshape input for LSTM - add time dimension if not already present
+        if len(x.shape) == 2:
+            x = x.unsqueeze(1)  # (batch, features) -> (batch, time_steps=1, features)
+        
+        # Initialize hidden state
+        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
+        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
+        
+        # Forward propagate LSTM
+        out, _ = self.lstm(x, (h0, c0))
+        
+        # Get output from last time step
+        out = out[:, -1, :]
+        
+        # Dense layers
+        out = self.fc1(out)
+        out = self.relu(out)
+        out = self.dropout(out)
+        out = self.fc2(out)
+        
+        return out
+
 # --- Workout type mapping (Unchanged) ---
 workout_map = { 0: "barbell bicep curl", 1: "bench press", 2: "chest fly machine", 3: "deadlift", 4: "decline bench press", 5: "hammer curl", 6: "hip thrust", 7: "incline bench press", 8: "lat pulldown", 9: "lateral raises", 10: "leg extensions", 11: "leg raises", 12: "plank", 13: "pull up", 14: "push ups", 15: "romanian deadlift", 16: "russian twist", 17: "shoulder press", 18: "squat", 19: "t bar row", 20: "tricep dips", 21: "tricep pushdown" }
 
@@ -64,7 +105,9 @@ print(f"SocketIO initialized with async_mode: {socketio.async_mode}")
 
 # --- Global variables ---
 pose_model = None
-workout_classifier = None # Global variable for the workout classifier
+workout_classifier = None # Global variable for the LSTM workout classifier
+feature_scaler = None # NEW: Global variable for the feature scaler
+label_encoder = None # NEW: Global variable for the label encoder
 muscle_group_classifier = None # Global variable for the muscle group classifier
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 last_inference_time = 0
@@ -124,43 +167,100 @@ def load_pose_model():
         return False
 
 def load_workout_classifier():
-    """Load the workout classifier model (.pkl) at startup"""
-    global workout_classifier
+    """Load the LSTM workout classifier model and supporting files"""
+    global workout_classifier, feature_scaler, label_encoder
     try:
         # Define potential base directories relative to the script or common structures
         possible_base_dirs = ['.', '..', '../..', 'AI']
-         # Construct full search paths, including a 'models' subdirectory as seen in training script
+        # Construct full search paths
         search_paths = [os.path.join(base, 'data', 'models') for base in possible_base_dirs] + \
                        [os.path.join(base, 'data') for base in possible_base_dirs] + \
-                       ['data/models', 'data', '/data/models', '/data'] # Add /data for container environments
+                       ['data/models', 'data', '/data/models', '/data']  # Add /data for container environments
 
-        classifier_path = find_file('rfc_workout_classifier.pkl', search_paths)
-
-        if classifier_path is None:
-            print(f"Error: Could not find workout classifier file 'rfc_workout_classifier.pkl'")
+        # 1. Find and load the LSTM model file
+        model_path = find_file('lstm_workout_classifier.pth', search_paths)
+        if model_path is None:
+            # Try to load best checkpoint file if main model not found
+            model_path = find_file('lstm_workout_best_checkpoint.pth', search_paths)
+            
+        if model_path is None:
+            print(f"Error: Could not find LSTM workout classifier model files")
             print(f"Current working directory: {os.getcwd()}")
             return False
 
-        with open(classifier_path, 'rb') as f:
-            workout_classifier = pickle.load(f)
-        print(f"Workout classifier loaded successfully from {classifier_path}")
+        # 2. Find and load the feature scaler
+        scaler_path = find_file('feature_scaler.pkl', search_paths)
+        if scaler_path is None:
+            print(f"Error: Could not find feature scaler file")
+            return False
 
-        # **REMOVED Feature Check**: Based on the error, the classifier expects 36 features.
-        # We will no longer drop features before prediction.
-        # if hasattr(workout_classifier, 'n_features_in_'):
-        #      expected_features = 36 # Now expecting full 36 features
-        #      if workout_classifier.n_features_in_ != expected_features:
-        #          print(f"Warning: Loaded classifier expects {workout_classifier.n_features_in_} features, expected {expected_features}.")
+        # 3. Find and load the label encoder
+        encoder_path = find_file('label_encoder.pkl', search_paths)
+        if encoder_path is None:
+            print(f"Error: Could not find label encoder file")
+            return False
+
+        # Load the model checkpoint
+        checkpoint = torch.load(model_path, map_location=device)
+        
+        # Check if this is a complete model or just state dict
+        if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+            # This is a checkpoint with metadata
+            input_size = checkpoint.get('input_size', 36)
+            hidden_size = checkpoint.get('hidden_size', 128)
+            num_layers = checkpoint.get('num_layers', 2)
+            num_classes = checkpoint.get('num_classes', 22)
+            dropout_rate = checkpoint.get('dropout_rate', 0.3)
+            
+            # Initialize model with parameters from checkpoint
+            workout_classifier = LSTMWorkoutClassifier(
+                input_size=input_size,
+                hidden_size=hidden_size,
+                num_layers=num_layers,
+                num_classes=num_classes,
+                dropout=dropout_rate
+            ).to(device)
+            
+            # Load the state dict
+            workout_classifier.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            # Assume it's just a state dict with default parameters
+            workout_classifier = LSTMWorkoutClassifier(
+                input_size=36,  # Default input size
+                hidden_size=128,
+                num_layers=2,
+                num_classes=22,
+                dropout=0.3
+            ).to(device)
+            workout_classifier.load_state_dict(checkpoint)
+        
+        # Set model to evaluation mode
+        workout_classifier.eval()
+        print(f"LSTM workout classifier loaded successfully from {model_path}")
+
+        # Load feature scaler
+        with open(scaler_path, 'rb') as f:
+            feature_scaler = pickle.load(f)
+        print(f"Feature scaler loaded successfully from {scaler_path}")
+
+        # Load label encoder
+        with open(encoder_path, 'rb') as f:
+            label_encoder = pickle.load(f)
+        print(f"Label encoder loaded successfully from {encoder_path}")
+
+        # Run warmup inference
+        if torch.cuda.is_available():
+            print("Running warmup inference for LSTM classifier...")
+            dummy_input = torch.zeros(1, 36, device=device)
+            with torch.no_grad():
+                _ = workout_classifier(dummy_input)
 
         return True
-    except FileNotFoundError:
-        print(f"Error: Workout classifier file not found at expected paths.")
+    except FileNotFoundError as e:
+        print(f"Error: File not found when loading LSTM workout classifier: {e}")
         return False
-    except pickle.UnpicklingError as e:
-         print(f"Error unpickling workout classifier model: {e}")
-         return False
     except Exception as e:
-        print(f"Error loading workout classifier model: {e}")
+        print(f"Error loading LSTM workout classifier: {e}")
         return False
 
 # --- Load muscle group classifier ---
@@ -308,40 +408,45 @@ def handle_pose_data(data):
 
         flat_landmarks_np = np.array(flat_landmarks, dtype=float) # Convert to numpy array for processing
 
-        # --- Predict Workout Type ---
+        # --- Predict Workout Type using LSTM model ---
         workout_type = 12 # Default to plank if classifier fails or isn't loaded
         predicted_workout_name = "plank (default)"
-        if workout_classifier:
+        
+        if workout_classifier and feature_scaler and label_encoder:
             try:
-                # **FIX:** Use the *full* 36 landmarks as the classifier expects them.
-                # features_for_classifier = np.delete(flat_landmarks_np, CLASSIFIER_DROP_INDICES) # REMOVED
-                features_for_classifier = flat_landmarks_np # Use all 36 features
-
-                # Reshape for sklearn model (expects 2D array: [n_samples, n_features])
-                features_for_classifier = features_for_classifier.reshape(1, -1)
-
-                # Predict
+                # Scale the features
+                scaled_features = feature_scaler.transform(flat_landmarks_np.reshape(1, -1))
+                
+                # Convert to PyTorch tensor
+                features_tensor = torch.FloatTensor(scaled_features).to(device)
+                
+                # Make prediction
                 prediction_start = time.time()
-                predicted_label = workout_classifier.predict(features_for_classifier)[0]
+                with torch.no_grad():
+                    outputs = workout_classifier(features_tensor)
+                    _, predicted_idx = torch.max(outputs, 1)
+                    predicted_idx = predicted_idx.item()
+                
+                # Convert index to original label
+                predicted_label = label_encoder.inverse_transform([predicted_idx])[0]
                 prediction_time = time.time() - prediction_start
-                # print(f"Classifier prediction time: {prediction_time:.4f}s") # Optional timing log
-
+                
                 # Validate and use prediction
                 if predicted_label in workout_map:
-                    workout_type = int(predicted_label) # Ensure it's an int
+                    workout_type = int(predicted_label)  # Convert to int
                     predicted_workout_name = workout_map[workout_type]
                     print(f"Predicted workout for client {client_id}: {workout_type} ({predicted_workout_name})")
                 else:
-                    print(f"Warning: Classifier predicted an invalid label ({predicted_label}) for client {client_id}. Defaulting to plank (12).")
-                    workout_type = 12 # Fallback to default
+                    print(f"Warning: LSTM classifier predicted an invalid label ({predicted_label}) for client {client_id}. Defaulting to plank (12).")
+                    workout_type = 12  # Fallback to default
                     predicted_workout_name = "plank (invalid prediction)"
-
+                
             except Exception as e:
-                print(f"Error during workout classification for client {client_id}: {e}. Defaulting to plank (12).")
+                print(f"Error during LSTM workout classification for client {client_id}: {e}. Defaulting to plank (12).")
                 workout_type = 12 # Fallback to default
                 predicted_workout_name = "plank (prediction error)"
         else:
-            print(f"Workout classifier not loaded. Defaulting to plank (12) for client {client_id}.")
+            print(f"LSTM workout classifier components not loaded. Defaulting to plank (12) for client {client_id}.")
             # workout_type remains 12 (default)
             
         # --- Predict Muscle Group ---
@@ -456,7 +561,7 @@ def handle_pose_data(data):
 @app.route('/')
 def index():
     """Basic route to confirm the server is running."""
-    return "Pose Correction WebSocket Server with Workout Classification is running."
+    return "Pose Correction WebSocket Server with LSTM Workout Classification is running."
 
 # --- Main Execution ---
 if __name__ == '__main__':
@@ -466,7 +571,7 @@ if __name__ == '__main__':
     print("Loading DNN pose model...")
     pose_model_loaded = load_pose_model()
 
-    print("Loading workout classifier model...")
+    print("Loading LSTM workout classifier model...")
     classifier_loaded = load_workout_classifier()
     
     print("Loading muscle group classifier model...")
@@ -476,7 +581,7 @@ if __name__ == '__main__':
         print("CRITICAL: DNN Pose Model failed to load. Corrections will be zeros.")
         # Allow server to start but corrections won't work properly
     if not classifier_loaded:
-        print("WARNING: Workout Classifier failed to load. Workout type will default to plank (12).")
+        print("WARNING: LSTM Workout Classifier failed to load. Workout type will default to plank (12).")
         # Allow server to start but classification won't work
     if not muscle_group_loaded:
         print("WARNING: Muscle Group Classifier failed to load. Muscle group predictions will not be available.")
@@ -495,4 +600,3 @@ if __name__ == '__main__':
              print("Falling back to standard Flask development server without explicit async_mode.")
              # Fallback if async_mode=None causes issues or if eventlet wasn't used initially
              app.run(host='0.0.0.0', port=8001, debug=False) # Use app.run as a last resort
-
