@@ -65,6 +65,7 @@ print(f"SocketIO initialized with async_mode: {socketio.async_mode}")
 # --- Global variables ---
 pose_model = None
 workout_classifier = None # Global variable for the workout classifier
+muscle_group_classifier = None # Global variable for the muscle group classifier
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 last_inference_time = 0
 INFERENCE_THROTTLE = 0.05 # 50ms throttle
@@ -160,6 +161,39 @@ def load_workout_classifier():
          return False
     except Exception as e:
         print(f"Error loading workout classifier model: {e}")
+        return False
+
+# --- Load muscle group classifier ---
+def load_muscle_group_classifier():
+    """Load the muscle group classifier model (.pkl) at startup"""
+    global muscle_group_classifier
+    try:
+        # Define potential base directories relative to the script or common structures
+        possible_base_dirs = ['.', '..', '../..', 'AI']
+         # Construct full search paths, including a 'models' subdirectory as seen in training script
+        search_paths = [os.path.join(base, 'data', 'models') for base in possible_base_dirs] + \
+                       [os.path.join(base, 'data') for base in possible_base_dirs] + \
+                       ['data/models', 'data', '/data/models', '/data'] # Add /data for container environments
+
+        classifier_path = find_file('rfc_muscle_group_classifier.pkl', search_paths)
+
+        if classifier_path is None:
+            print(f"Error: Could not find muscle group classifier file 'rfc_muscle_group_classifier.pkl'")
+            print(f"Current working directory: {os.getcwd()}")
+            return False
+
+        with open(classifier_path, 'rb') as f:
+            muscle_group_classifier = pickle.load(f)
+        print(f"Muscle group classifier loaded successfully from {classifier_path}")
+        return True
+    except FileNotFoundError:
+        print(f"Error: Muscle group classifier file not found at expected paths.")
+        return False
+    except pickle.UnpicklingError as e:
+         print(f"Error unpickling muscle group classifier model: {e}")
+         return False
+    except Exception as e:
+        print(f"Error loading muscle group classifier model: {e}")
         return False
 
 # --- Pose Correction Logic (Unchanged) ---
@@ -309,6 +343,49 @@ def handle_pose_data(data):
         else:
             print(f"Workout classifier not loaded. Defaulting to plank (12) for client {client_id}.")
             # workout_type remains 12 (default)
+            
+        # --- Predict Muscle Group ---
+        # Define muscle group mapping (should match frontend)
+        muscle_group_map = {
+            1: "shoulders",
+            2: "chest",
+            3: "biceps",
+            4: "core",
+            5: "triceps",
+            6: "legs",
+            7: "back"
+        }
+        
+        # Default to no muscle group if classifier fails
+        muscle_group = 0
+        predicted_muscle_group = "none (default)"
+        
+        if muscle_group_classifier:
+            try:
+                # Use the same features as for workout classification
+                features_for_muscle = flat_landmarks_np.reshape(1, -1)
+                
+                # Predict muscle group
+                muscle_prediction_start = time.time()
+                predicted_muscle_label = muscle_group_classifier.predict(features_for_muscle)[0]
+                muscle_prediction_time = time.time() - muscle_prediction_start
+                
+                # Validate and use prediction
+                if predicted_muscle_label in muscle_group_map:
+                    muscle_group = int(predicted_muscle_label)
+                    predicted_muscle_group = muscle_group_map[muscle_group]
+                    print(f"Predicted muscle group for client {client_id}: {muscle_group} ({predicted_muscle_group})")
+                else:
+                    print(f"Warning: Muscle group classifier predicted an invalid label ({predicted_muscle_label}) for client {client_id}.")
+                    muscle_group = 0
+                    predicted_muscle_group = "none (invalid prediction)"
+                    
+            except Exception as e:
+                print(f"Error during muscle group classification for client {client_id}: {e}")
+                muscle_group = 0
+                predicted_muscle_group = "none (prediction error)"
+        else:
+            print(f"Muscle group classifier not loaded. No muscle group prediction for client {client_id}.")
 
         # --- Get Pose Corrections (Handles Throttling) ---
         # Pass the *original* flat_landmarks (36 values) and the *predicted* workout_type
@@ -341,8 +418,9 @@ def handle_pose_data(data):
                 print(f"Warning: Index out of bounds ({base_idx + 2} >= {len(corrections_array)}) when processing corrections for joint {original_landmark_idx}")
                 correction_data[str(original_landmark_idx)] = {'x': 0.0, 'y': 0.0, 'z': 0.0}
 
-        # Add predicted workout type to correction data
+        # Add predicted workout type and muscle group to correction data
         correction_data['predicted_workout_type'] = workout_type
+        correction_data['predicted_muscle_group'] = muscle_group
 
         # --- Logging and Emitting ---
         emit_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
@@ -350,6 +428,7 @@ def handle_pose_data(data):
         # Log details before emitting
         # print(f"--- Emit Details for client {client_id} at {emit_timestamp} ---")
         # print(f"Workout Used: {workout_type} ({predicted_workout_name})")
+        # print(f"Muscle Group: {muscle_group} ({predicted_muscle_group})")
         # print(f"Raw corrections array: {corrections_array}") # Can be verbose
         # print(f"Formatted correction_data: {json.dumps(correction_data)}")
         # if not significant_correction_found:
@@ -362,7 +441,7 @@ def handle_pose_data(data):
         # Log processing time if slow
         process_time = time.time() - process_start
         if process_time > 0.2: # Log if processing takes > 200ms
-            print(f"Slow processing cycle for client {client_id}: {process_time:.3f}s (Workout: {predicted_workout_name})")
+            print(f"Slow processing cycle for client {client_id}: {process_time:.3f}s (Workout: {predicted_workout_name}, Muscle: {predicted_muscle_group})")
 
     except Exception as e:
         # Log any exceptions during processing
@@ -389,6 +468,9 @@ if __name__ == '__main__':
 
     print("Loading workout classifier model...")
     classifier_loaded = load_workout_classifier()
+    
+    print("Loading muscle group classifier model...")
+    muscle_group_loaded = load_muscle_group_classifier()
 
     if not pose_model_loaded:
         print("CRITICAL: DNN Pose Model failed to load. Corrections will be zeros.")
@@ -396,6 +478,9 @@ if __name__ == '__main__':
     if not classifier_loaded:
         print("WARNING: Workout Classifier failed to load. Workout type will default to plank (12).")
         # Allow server to start but classification won't work
+    if not muscle_group_loaded:
+        print("WARNING: Muscle Group Classifier failed to load. Muscle group predictions will not be available.")
+        # Allow server to start but muscle group detection won't work
 
     print(f"Starting WebSocket server on http://0.0.0.0:8001 (using {device})")
 

@@ -174,14 +174,59 @@ const WorkoutSelector = ({ selectedWorkout, onSelectWorkout, isFullscreen }) => 
 };
 
 // New MuscleGroupVisualizer component
-const MuscleGroupVisualizer = ({ isVisible, isFullscreen }) => {
-  // Format data for React Body Highlighter - activate biceps
-  const muscleData = [
-    { name: 'Bicep Curl', muscles: [MuscleType.BICEPS] },
-    { name: 'Tricep Pushdown', muscles: [MuscleType.TRICEPS] },
-    { name: 'Lat Pulldown', muscles: [MuscleType.BACK_DELTOIDS, MuscleType.LOWER_BACK, MuscleType.UPPER_BACK] },
-  ];
-
+const MuscleGroupVisualizer = ({ isVisible, isFullscreen, muscleGroup }) => {
+  // Get the appropriate muscle data based on the current muscle group
+  let muscleData;
+  
+  // Use a safer approach - hardcode a valid array for the default case
+  if (muscleGroup === 0 || muscleGroup > 7) {
+    // Hardcoded safe default with a valid muscle to avoid library errors
+    muscleData = [
+      { name: 'Rest', muscles: [] }
+    ];
+  } else {
+    // Function to map muscle group IDs to React Body Highlighter muscle types
+    switch(muscleGroup) {
+      case 1: // shoulders
+        muscleData = [
+          { name: 'Shoulder Press', muscles: [MuscleType.BACK_DELTOIDS, MuscleType.FRONT_DELTOIDS] }
+        ];
+        break;
+      case 2: // chest
+        muscleData = [
+          { name: 'Bench Press', muscles: [MuscleType.CHEST] }
+        ];
+        break;
+      case 3: // biceps
+        muscleData = [
+          { name: 'Bicep Curl', muscles: [MuscleType.BICEPS] }
+        ];
+        break;
+      case 4: // core
+        muscleData = [
+          { name: 'Crunches', muscles: [MuscleType.ABS, MuscleType.OBLIQUES] }
+        ];
+        break;
+      case 5: // triceps
+        muscleData = [
+          { name: 'Tricep Pushdown', muscles: [MuscleType.TRICEPS] }
+        ];
+        break;
+      case 6: // legs
+        muscleData = [
+          { name: 'Squats', muscles: [MuscleType.QUADRICEPS, MuscleType.HAMSTRING, MuscleType.CALVES] },
+          { name: 'Hip Thrust', muscles: [MuscleType.GLUTEAL] }
+        ];
+        break;
+      case 7: // back
+        muscleData = [
+          { name: 'Lat Pulldown', muscles: [MuscleType.UPPER_BACK, MuscleType.LOWER_BACK] }
+        ];
+        break;
+    }
+  }
+  
+  // Now just check if we want to show the visualizer
   return isVisible ? (
     <>
       {/* Front view - Left side */}
@@ -257,11 +302,19 @@ const TrainingPage = () => {
   // Modified workout prediction state
   const [predictedWorkout, setPredictedWorkout] = useState(12); // Default to plank (12)
   
+  // Add state for muscle group prediction
+  const [predictedMuscleGroup, setPredictedMuscleGroup] = useState(0); // Default to none
+  
+  // Add state for muscle group prediction stability
+  const [recentMuscleGroupPredictions, setRecentMuscleGroupPredictions] = useState([]);
+  const [muscleGroupConfidence, setMuscleGroupConfidence] = useState(0);
+  
   // Add state for workout prediction stability
   const [recentWorkoutPredictions, setRecentWorkoutPredictions] = useState([]);
   const PREDICTION_WINDOW_SIZE = 30; // Keep track of ~1.5 seconds of predictions (at 50ms intervals)
   const CONFIDENCE_THRESHOLD = 0.6; // 60% majority needed to change workout
   const lastStableWorkoutRef = useRef(12); // Track the last stable workout type
+  const lastStableMuscleGroupRef = useRef(0); // Track the last stable muscle group
   // Add state to track overall confidence
   const [predictionConfidence, setPredictionConfidence] = useState(0);
 
@@ -300,6 +353,47 @@ const TrainingPage = () => {
       if (confidence >= CONFIDENCE_THRESHOLD || mostFrequent === lastStableWorkoutRef.current) {
         setPredictedWorkout(mostFrequent);
         lastStableWorkoutRef.current = mostFrequent;
+      }
+      
+      return updated;
+    });
+  };
+  
+  // Add new function to stabilize muscle group predictions
+  const updateStableMuscleGroupPrediction = (newPrediction) => {
+    // Update the array of recent predictions
+    setRecentMuscleGroupPredictions(prev => {
+      // Add new prediction and keep window size limited
+      const updated = [...prev, newPrediction].slice(-PREDICTION_WINDOW_SIZE);
+      
+      // Count occurrences of each muscle group in our window
+      const counts = updated.reduce((acc, type) => {
+        acc[type] = (acc[type] || 0) + 1;
+        return acc;
+      }, {});
+      
+      // Find the most frequent muscle group
+      let mostFrequent = null;
+      let highestCount = 0;
+      
+      Object.entries(counts).forEach(([type, count]) => {
+        if (count > highestCount) {
+          highestCount = count;
+          mostFrequent = Number(type);
+        }
+      });
+      
+      // Calculate confidence (percentage of window with this prediction)
+      const confidence = highestCount / updated.length;
+      
+      // Store the confidence value 
+      setMuscleGroupConfidence(confidence);
+      
+      // Only update the displayed muscle group if confidence passes threshold
+      // or if it's the same as our current stable muscle group
+      if (confidence >= CONFIDENCE_THRESHOLD || mostFrequent === lastStableMuscleGroupRef.current) {
+        setPredictedMuscleGroup(mostFrequent);
+        lastStableMuscleGroupRef.current = mostFrequent;
       }
       
       return updated;
@@ -361,6 +455,12 @@ const TrainingPage = () => {
         if (data.predicted_workout_type !== undefined) {
           // Instead of directly setting the workout, update our stable prediction
           updateStableWorkoutPrediction(data.predicted_workout_type);
+        }
+        
+        // Check if there's a predicted muscle group in the data
+        if (data.predicted_muscle_group !== undefined) {
+          // Update our stable muscle group prediction
+          updateStableMuscleGroupPrediction(data.predicted_muscle_group);
         }
 
         // Update timing info
@@ -583,7 +683,7 @@ const TrainingPage = () => {
             />
             
             {/* Add Muscle Group Visualizer */}
-            <MuscleGroupVisualizer isVisible={showMuscleVisualizer} isFullscreen={isFullscreen} />
+            <MuscleGroupVisualizer isVisible={showMuscleVisualizer} isFullscreen={isFullscreen} muscleGroup={predictedMuscleGroup} />
             <MuscleVisualizerToggle 
               isVisible={showMuscleVisualizer} 
               toggleVisibility={toggleMuscleVisualizer} 
@@ -605,6 +705,16 @@ const TrainingPage = () => {
                 </>
               )}
             </p>
+            {predictedMuscleGroup > 0 && (
+              <p className={`${isFullscreen ? '' : 'mt-1'}`}>
+                Muscle Group: <span className="font-semibold">{muscleGroupMap[predictedMuscleGroup]}</span>
+                {recentMuscleGroupPredictions.length > 0 && (
+                  <span className="ml-2 text-xs opacity-75">
+                    (Confidence: {Math.round(muscleGroupConfidence * 100)}%)
+                  </span>
+                )}
+              </p>
+            )}
             {(feedbackLatency > 0 || receivedCount > 0) && (
               <p className={`${isFullscreen ? '' : 'mt-1'} text-xs`}>
                 Latency: {feedbackLatency > 0 ? `${feedbackLatency}ms` : 'N/A'} | Corrections: {receivedCount}
