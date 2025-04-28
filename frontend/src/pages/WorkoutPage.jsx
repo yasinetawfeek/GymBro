@@ -156,12 +156,16 @@ const FullscreenButton = ({ isFullscreen, toggleFullscreen }) => {
   );
 };
 
-// Now add a new workout selector component
+// Add workout selector component
 const WorkoutSelector = ({ selectedWorkout, onSelectWorkout, isFullscreen }) => {
   return (
-    <div className={`${isFullscreen ? 'absolute top-16 left-4 z-40' : 'mb-2'}`}>
+    <div className={`text-white ${isFullscreen ? 'absolute top-16 right-4 z-40' : 'text-center mb-4'}`}>
+      <label htmlFor="workout-select" className={`mr-2 ${isFullscreen ? 'text-white' : ''}`}>
+        Workout:
+      </label>
       <select 
-        value={selectedWorkout} 
+        id="workout-select"
+        value={selectedWorkout}
         onChange={(e) => onSelectWorkout(Number(e.target.value))}
         className={`px-3 py-1 rounded-md ${isFullscreen ? 'bg-black/40 text-white border border-gray-500' : 'bg-white dark:bg-gray-700 border dark:border-gray-600'}`}
       >
@@ -302,6 +306,9 @@ const TrainingPage = () => {
   // Modified workout prediction state
   const [predictedWorkout, setPredictedWorkout] = useState(12); // Default to plank (12)
   
+  // Add state for manually selected workout (default to predicted)
+  const [selectedWorkout, setSelectedWorkout] = useState(12); // Default to plank (12)
+  
   // Add state for muscle group prediction
   const [predictedMuscleGroup, setPredictedMuscleGroup] = useState(0); // Default to none
   
@@ -317,6 +324,11 @@ const TrainingPage = () => {
   const lastStableMuscleGroupRef = useRef(0); // Track the last stable muscle group
   // Add state to track overall confidence
   const [predictionConfidence, setPredictionConfidence] = useState(0);
+  
+  // Add handler for workout selection change
+  const handleWorkoutChange = (workoutId) => {
+    setSelectedWorkout(Number(workoutId));
+  };
 
   // Add new function to stabilize workout predictions
   const updateStableWorkoutPrediction = (newPrediction) => {
@@ -659,9 +671,11 @@ const TrainingPage = () => {
       <NavBar isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />
       <main className={isFullscreen ? "h-full" : ""}>
         <div className={fullscreenStyles.container}>
+          {!isFullscreen && <WorkoutSelector selectedWorkout={selectedWorkout} onSelectWorkout={handleWorkoutChange} isFullscreen={isFullscreen} />}
           <div className={fullscreenStyles.videoContainer}>
             <ConnectionStatus status={connectionStatus} />
             <FullscreenButton isFullscreen={isFullscreen} toggleFullscreen={toggleFullscreen} />
+            {isFullscreen && <WorkoutSelector selectedWorkout={selectedWorkout} onSelectWorkout={handleWorkoutChange} isFullscreen={isFullscreen} />}
             <video
               ref={webcamRef}
               className="absolute top-0 left-0 w-full h-full object-cover rounded-lg"
@@ -682,7 +696,7 @@ const TrainingPage = () => {
               }}
             />
             
-            {/* Add Muscle Group Visualizer */}
+            {/* Add Muscle Group Visualizer - use selectedWorkout instead of predictedWorkout */}
             <MuscleGroupVisualizer isVisible={showMuscleVisualizer} isFullscreen={isFullscreen} muscleGroup={predictedMuscleGroup} />
             <MuscleVisualizerToggle 
               isVisible={showMuscleVisualizer} 
@@ -691,22 +705,26 @@ const TrainingPage = () => {
             />
           </div>
           <div className={fullscreenStyles.infoPanel}>
-            <p>
-              {predictionConfidence < 0.7 ? (
-                <span className="font-semibold text-yellow-400">Start working out or position yourself in frame</span>
-              ) : (
-                <>
-                  Predicted Workout: <span className="font-semibold">{workoutMap[predictedWorkout]}</span>
-                  {recentWorkoutPredictions.length > 0 && (
-                    <span className="ml-2 text-xs opacity-75">
-                      (Confidence: {Math.round(predictionConfidence * 100)}%)
-                    </span>
-                  )}
-                </>
-              )}
-            </p>
+            <div className="flex flex-wrap justify-center items-center">
+              <div className="text-center">
+                <p>
+                  <span className="font-medium">Selected Workout:</span> {workoutMap[selectedWorkout]}
+                </p>
+                {predictedWorkout !== selectedWorkout && (
+                  <p className="text-sm">
+                    <span className="font-medium">AI Suggestion:</span> {workoutMap[predictedWorkout]}
+                    {recentWorkoutPredictions.length > 0 && (
+                      <span className="ml-2 text-xs opacity-75">
+                        (Confidence: {Math.round(predictionConfidence * 100)}%)
+                      </span>
+                    )}
+                  </p>
+                )}
+              </div>
+            </div>
+            
             {predictedMuscleGroup > 0 && (
-              <p className={`${isFullscreen ? '' : 'mt-1'}`}>
+              <p className={`${isFullscreen ? '' : 'mt-1'} text-center`}>
                 Muscle Group: <span className="font-semibold">{muscleGroupMap[predictedMuscleGroup]}</span>
                 {recentMuscleGroupPredictions.length > 0 && (
                   <span className="ml-2 text-xs opacity-75">
@@ -715,12 +733,13 @@ const TrainingPage = () => {
                 )}
               </p>
             )}
+            
             {(feedbackLatency > 0 || receivedCount > 0) && (
-              <p className={`${isFullscreen ? '' : 'mt-1'} text-xs`}>
+              <p className={`${isFullscreen ? '' : 'mt-1'} text-xs text-center`}>
                 Latency: {feedbackLatency > 0 ? `${feedbackLatency}ms` : 'N/A'} | Corrections: {receivedCount}
               </p>
             )}
-            <p className={`${isFullscreen ? '' : 'mt-1'} text-xs`}>Socket: {connectionStatus}</p>
+            <p className={`${isFullscreen ? '' : 'mt-1'} text-xs text-center`}>Socket: {connectionStatus}</p>
           </div>
         </div>
       </main>
