@@ -24,6 +24,19 @@ import json
 import time
 from datetime import datetime # Import datetime for formatted timestamp
 from sklearn.preprocessing import StandardScaler # Added for feature scaling
+from collections import deque # For sequence buffer management
+
+# --- Constants ---
+# Body keypoints indices from MediaPipe BlazePose (the key joints we're tracking)
+BODY_KEYPOINTS_INDICES = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]
+LANDMARK_DIM = 3  # x, y, z
+FLAT_LANDMARK_SIZE = len(BODY_KEYPOINTS_INDICES) * LANDMARK_DIM  # Should be 36
+
+# --- Config for sequence models ---
+# This will be populated when models are loaded
+workout_classifier_config = {
+    'sequence_length': 10  # Default value, may be overridden when model loads
+}
 
 # --- DNN model class definition (Unchanged) ---
 class EnhancedPoseModel(nn.Module):
@@ -52,40 +65,65 @@ class EnhancedPoseModel(nn.Module):
         # Model outputs values in range [-0.1, 0.1]
         return self.net(x) * 0.1
 
-# --- LSTM Workout Classifier model definition (NEW) ---
+# --- LSTM Workout Classifier model definition (UPDATED for sequences) ---
 class LSTMWorkoutClassifier(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, num_classes, dropout=0.2):
         super(LSTMWorkoutClassifier, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         
-        # LSTM layers
+        # LSTM layers with increased dropout
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, 
                            batch_first=True, dropout=dropout if num_layers > 1 else 0)
+        
+        # Attention mechanism
+        self.attention = nn.Sequential(
+            nn.Linear(hidden_size, 64),
+            nn.Tanh(),
+            nn.Linear(64, 1),
+            nn.Softmax(dim=1)
+        )
+        
+        # Additional dropout after LSTM
+        self.lstm_dropout = nn.Dropout(dropout + 0.1)
         
         # Fully connected layers
         self.fc1 = nn.Linear(hidden_size, 128)
         self.dropout = nn.Dropout(dropout)
         self.relu = nn.ReLU()
+        self.batch_norm = nn.BatchNorm1d(128)
         self.fc2 = nn.Linear(128, num_classes)
         
     def forward(self, x):
-        # Reshape input for LSTM - add time dimension if not already present
+        # Ensure x has the right shape for sequences
+        # x should be [batch_size, sequence_length, features]
         if len(x.shape) == 2:
-            x = x.unsqueeze(1)  # (batch, features) -> (batch, time_steps=1, features)
+            # If single frame, reshape to [batch, 1, features]
+            x = x.unsqueeze(1)
+        
+        batch_size, seq_len, _ = x.size()
         
         # Initialize hidden state
-        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
-        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
+        h0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).to(x.device)
+        c0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).to(x.device)
         
         # Forward propagate LSTM
-        out, _ = self.lstm(x, (h0, c0))
+        lstm_out, _ = self.lstm(x, (h0, c0))  # lstm_out: [batch_size, seq_len, hidden_size]
         
-        # Get output from last time step
-        out = out[:, -1, :]
+        # Apply additional dropout to LSTM output
+        lstm_out = self.lstm_dropout(lstm_out)
+        
+        # Apply attention mechanism if sequence length > 1
+        if seq_len > 1:
+            attention_weights = self.attention(lstm_out)  # [batch_size, seq_len, 1]
+            context_vector = torch.sum(attention_weights * lstm_out, dim=1)  # [batch_size, hidden_size]
+        else:
+            # If single frame, just use the LSTM output directly
+            context_vector = lstm_out.squeeze(1)
         
         # Dense layers
-        out = self.fc1(out)
+        out = self.fc1(context_vector)
+        out = self.batch_norm(out)
         out = self.relu(out)
         out = self.dropout(out)
         out = self.fc2(out)
@@ -106,12 +144,19 @@ print(f"SocketIO initialized with async_mode: {socketio.async_mode}")
 # --- Global variables ---
 pose_model = None
 workout_classifier = None # Global variable for the LSTM workout classifier
-feature_scaler = None # NEW: Global variable for the feature scaler
-label_encoder = None # NEW: Global variable for the label encoder
+feature_scaler = None # Global variable for the feature scaler
+label_encoder = None # Global variable for the label encoder
 muscle_group_classifier = None # Global variable for the muscle group classifier
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 last_inference_time = 0
 INFERENCE_THROTTLE = 0.05 # 50ms throttle
+
+# --- Sequence-related global variables (NEW) ---
+SEQUENCE_LENGTH = 10  # Number of frames to use for sequence
+client_pose_buffers = {}  # Dictionary to store pose buffers for each client
+client_workout_predictions = {}  # Store recent workout predictions for smoothing
+client_muscle_predictions = {}  # Store recent muscle group predictions for smoothing
+prediction_smoothing_window = 5  # Number of predictions to average for smoothing
 
 # --- Model Loading ---
 def find_file(filename, search_paths):
@@ -177,8 +222,12 @@ def load_workout_classifier():
                        [os.path.join(base, 'data') for base in possible_base_dirs] + \
                        ['data/models', 'data', '/data/models', '/data']  # Add /data for container environments
 
-        # 1. Find and load the LSTM model file
-        model_path = find_file('lstm_workout_classifier.pth', search_paths)
+        # 1. Find and load the LSTM model file - first check for the sequential version
+        model_path = find_file('lstm_workout_classifier_sequential_v2.pth', search_paths)
+        if model_path is None:
+            # Try to load the original model as fallback
+            model_path = find_file('lstm_workout_classifier.pth', search_paths)
+            
         if model_path is None:
             # Try to load best checkpoint file if main model not found
             model_path = find_file('lstm_workout_best_checkpoint.pth', search_paths)
@@ -223,6 +272,12 @@ def load_workout_classifier():
             
             # Load the state dict
             workout_classifier.load_state_dict(checkpoint['model_state_dict'])
+            
+            # Check if the model has sequence_length parameter
+            if 'sequence_length' in checkpoint:
+                global SEQUENCE_LENGTH
+                SEQUENCE_LENGTH = checkpoint['sequence_length']
+                print(f"Using sequence length from model: {SEQUENCE_LENGTH}")
         else:
             # Assume it's just a state dict with default parameters
             workout_classifier = LSTMWorkoutClassifier(
@@ -248,12 +303,13 @@ def load_workout_classifier():
             label_encoder = pickle.load(f)
         print(f"Label encoder loaded successfully from {encoder_path}")
 
-        # Run warmup inference
+        # Run warmup inference with sequence
         if torch.cuda.is_available():
             print("Running warmup inference for LSTM classifier...")
-            dummy_input = torch.zeros(1, 36, device=device)
+            # Create a dummy sequence for warmup
+            dummy_sequence = torch.zeros(1, SEQUENCE_LENGTH, 36, device=device)
             with torch.no_grad():
-                _ = workout_classifier(dummy_input)
+                _ = workout_classifier(dummy_sequence)
 
         return True
     except FileNotFoundError as e:
@@ -336,6 +392,209 @@ def get_pose_corrections(landmarks, workout_type=0):
         # Return zeros in case of prediction error
         return np.zeros(36)
 
+# --- NEW: Sequence-based workout prediction function ---
+def predict_workout_from_sequence(client_id, current_features):
+    """
+    Predict workout type using sequence of frames
+    
+    Args:
+        client_id: ID of the client
+        current_features: Current frame features (36 values)
+        
+    Returns:
+        predicted_workout_type: Integer workout type
+        predicted_workout_name: String workout name
+    """
+    # Default values
+    workout_type = 12  # Default to plank
+    predicted_workout_name = "plank (default)"
+    
+    # Check if required components are loaded
+    if not all([workout_classifier, feature_scaler, label_encoder]):
+        return workout_type, predicted_workout_name
+    
+    try:
+        # Initialize buffer for new clients
+        if client_id not in client_pose_buffers:
+            client_pose_buffers[client_id] = deque(maxlen=SEQUENCE_LENGTH)
+            client_workout_predictions[client_id] = deque(maxlen=prediction_smoothing_window)
+        
+        # Scale the current frame features
+        scaled_features = feature_scaler.transform(current_features.reshape(1, -1))[0]
+        
+        # Add to buffer
+        client_pose_buffers[client_id].append(scaled_features)
+        
+        # If buffer is not full yet, use default workout
+        if len(client_pose_buffers[client_id]) < SEQUENCE_LENGTH:
+            # Add placeholder prediction until we have enough frames
+            client_workout_predictions[client_id].append(workout_type)
+            return workout_type, f"plank (collecting sequence: {len(client_pose_buffers[client_id])}/{SEQUENCE_LENGTH})"
+        
+        # Create sequence tensor from buffer
+        sequence = np.array(list(client_pose_buffers[client_id]))
+        sequence_tensor = torch.FloatTensor(sequence).unsqueeze(0).to(device)  # [1, sequence_length, features]
+        
+        # Make prediction
+        with torch.no_grad():
+            outputs = workout_classifier(sequence_tensor)
+            probabilities = torch.softmax(outputs, dim=1)[0]  # Get probabilities
+            confidence, predicted_idx = torch.max(probabilities, 0)
+            predicted_idx = predicted_idx.item()
+            confidence = confidence.item()
+        
+        # Convert index to original label
+        predicted_label = label_encoder.inverse_transform([predicted_idx])[0]
+        
+        # Validate prediction
+        if predicted_label in workout_map:
+            # Add to prediction history
+            client_workout_predictions[client_id].append(int(predicted_label))
+            
+            # Get most common prediction from recent history (smoothing)
+            workout_counts = {}
+            for pred in client_workout_predictions[client_id]:
+                workout_counts[pred] = workout_counts.get(pred, 0) + 1
+            
+            # Find most common prediction
+            workout_type = max(workout_counts.items(), key=lambda x: x[1])[0]
+            predicted_workout_name = f"{workout_map[workout_type]} (conf: {confidence:.2f})"
+        else:
+            # Invalid prediction, use default
+            workout_type = 12
+            predicted_workout_name = "plank (invalid prediction)"
+            # Add default to prediction history for continuity
+            client_workout_predictions[client_id].append(workout_type)
+            
+        return workout_type, predicted_workout_name
+        
+    except Exception as e:
+        print(f"Error in sequence-based workout prediction for client {client_id}: {e}")
+        # Add default to prediction history for continuity
+        if client_id in client_workout_predictions:
+            client_workout_predictions[client_id].append(workout_type)
+        return workout_type, "plank (prediction error)"
+
+# --- NEW: Sequence-based muscle group prediction ---
+def predict_muscle_group_from_sequence(client_id, current_features, workout_type):
+    """
+    Predict muscle group using sequence data and workout type
+    
+    Args:
+        client_id: ID of the client
+        current_features: Current frame features
+        workout_type: Predicted workout type
+        
+    Returns:
+        muscle_group: Integer muscle group
+        predicted_muscle_group: String muscle group name
+    """
+    # Define muscle group mapping
+    muscle_group_map = {
+        1: "shoulders",
+        2: "chest",
+        3: "biceps",
+        4: "core",
+        5: "triceps",
+        6: "legs",
+        7: "back"
+    }
+    
+    # Default values
+    muscle_group = 0
+    predicted_muscle_group = "none (default)"
+    
+    # Fast path for common workout types - directly map to muscle groups
+    # This provides consistency for well-known workout types
+    workout_to_muscle = {
+        0: 3,  # barbell bicep curl -> biceps
+        1: 2,  # bench press -> chest
+        2: 2,  # chest fly machine -> chest
+        3: 7,  # deadlift -> back
+        4: 2,  # decline bench press -> chest
+        5: 3,  # hammer curl -> biceps
+        6: 6,  # hip thrust -> legs
+        7: 2,  # incline bench press -> chest
+        8: 7,  # lat pulldown -> back
+        9: 1,  # lateral raises -> shoulders
+        10: 6, # leg extensions -> legs
+        11: 4, # leg raises -> core
+        12: 4, # plank -> core
+        13: 7, # pull up -> back
+        14: 2, # push ups -> chest
+        15: 7, # romanian deadlift -> back
+        16: 4, # russian twist -> core
+        17: 1, # shoulder press -> shoulders
+        18: 6, # squat -> legs
+        19: 7, # t bar row -> back
+        20: 5, # tricep dips -> triceps
+        21: 5  # tricep pushdown -> triceps
+    }
+    
+    # If we have a direct mapping, use it
+    if workout_type in workout_to_muscle:
+        muscle_group = workout_to_muscle[workout_type]
+        
+        # Initialize buffer for new clients
+        if client_id not in client_muscle_predictions:
+            client_muscle_predictions[client_id] = deque(maxlen=prediction_smoothing_window)
+        
+        # Add to prediction history
+        client_muscle_predictions[client_id].append(muscle_group)
+        
+        # Apply smoothing
+        muscle_counts = {}
+        for pred in client_muscle_predictions[client_id]:
+            muscle_counts[pred] = muscle_counts.get(pred, 0) + 1
+        
+        # Find most common prediction
+        muscle_group = max(muscle_counts.items(), key=lambda x: x[1])[0]
+        predicted_muscle_group = muscle_group_map.get(muscle_group, "unknown")
+        
+        return muscle_group, predicted_muscle_group
+    
+    # Fall back to muscle group classifier if available
+    if muscle_group_classifier:
+        try:
+            # Use current features for prediction
+            features_for_muscle = current_features.reshape(1, -1)
+            
+            # Predict muscle group
+            predicted_muscle_label = muscle_group_classifier.predict(features_for_muscle)[0]
+            
+            # Initialize buffer for new clients
+            if client_id not in client_muscle_predictions:
+                client_muscle_predictions[client_id] = deque(maxlen=prediction_smoothing_window)
+            
+            # Validate prediction
+            if predicted_muscle_label in muscle_group_map:
+                muscle_group = int(predicted_muscle_label)
+                
+                # Add to prediction history
+                client_muscle_predictions[client_id].append(muscle_group)
+                
+                # Apply smoothing
+                muscle_counts = {}
+                for pred in client_muscle_predictions[client_id]:
+                    muscle_counts[pred] = muscle_counts.get(pred, 0) + 1
+                
+                # Find most common prediction
+                muscle_group = max(muscle_counts.items(), key=lambda x: x[1])[0]
+                predicted_muscle_group = muscle_group_map.get(muscle_group, "unknown")
+            else:
+                muscle_group = 0
+                predicted_muscle_group = "none (invalid prediction)"
+                # Add default to prediction history
+                client_muscle_predictions[client_id].append(muscle_group)
+                
+        except Exception as e:
+            print(f"Error in muscle group prediction for client {client_id}: {e}")
+            # Add default to prediction history
+            if client_id in client_muscle_predictions:
+                client_muscle_predictions[client_id].append(muscle_group)
+    
+    return muscle_group, predicted_muscle_group
+
 # --- Connection Tracking ---
 connected_clients = 0
 last_processed_time = {} # Store last *processed* request time per client
@@ -355,8 +614,17 @@ def handle_disconnect():
     global connected_clients
     client_id = request.sid
     connected_clients -= 1
+    
+    # Clean up client-specific data
     if client_id in last_processed_time:
-        del last_processed_time[client_id] # Clean up tracking
+        del last_processed_time[client_id]
+    if client_id in client_pose_buffers:
+        del client_pose_buffers[client_id]
+    if client_id in client_workout_predictions:
+        del client_workout_predictions[client_id]
+    if client_id in client_muscle_predictions:
+        del client_muscle_predictions[client_id]
+        
     print(f'Client disconnected ({client_id}). Total clients: {connected_clients}')
 
 @socketio.on('pose_data')
@@ -364,194 +632,107 @@ def handle_pose_data(data):
     """Handles incoming pose data, predicts workout, performs inference, and emits corrections."""
     client_id = request.sid
     now = time.time()
-    receive_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-    # print(f"Received pose_data from client ({client_id}) at {receive_timestamp}") # Verbose log
+    # receive_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3] # Optional: for detailed logging
 
     # Check time since last *processed* request for logging long gaps
-    if client_id in last_processed_time and last_processed_time[client_id] != 0:
-        time_since_last_processed = now - last_processed_time[client_id]
-        if time_since_last_processed > 1.0:
-            print(f"Long gap between *processed* requests for client {client_id}: {time_since_last_processed:.2f}s")
+    # if client_id in last_processed_time and last_processed_time[client_id] != 0:
+    #     time_since_last_processed = now - last_processed_time[client_id]
+    #     if time_since_last_processed > 1.0:
+    #         print(f"Long gap between *processed* requests for client {client_id}: {time_since_last_processed:.2f}s")
 
     try:
         process_start = time.time()
         landmarks = data.get('landmarks', [])
+        # Get selected workout from frontend if provided, otherwise default to None
+        selected_workout = data.get('selected_workout')
+        
         if not landmarks:
             print(f"Warning: Received empty landmarks list from {client_id}.")
-            return # Stop processing if landmarks are missing
+            return
 
         # --- Landmark Processing (Extract relevant coordinates) ---
         flat_landmarks = []
-        selected_indices = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28] # Indices from MediaPipe
-        for idx in selected_indices:
-            if idx < len(landmarks) and landmarks[idx] is not None:
+        for idx in BODY_KEYPOINTS_INDICES:
+            if idx < len(landmarks) and landmarks[idx] is not None and isinstance(landmarks[idx], dict):
                 landmark = landmarks[idx]
-                if isinstance(landmark, dict):
-                    # Ensure keys exist, default to 0 if missing
-                    flat_landmarks.extend([
-                        landmark.get('x', 0.0),
-                        landmark.get('y', 0.0),
-                        landmark.get('z', 0.0)
-                    ])
-                else:
-                     print(f"Warning: Landmark at index {idx} from client {client_id} is not a dictionary: {landmark}. Using zeros.")
-                     flat_landmarks.extend([0.0, 0.0, 0.0])
+                flat_landmarks.extend([
+                    landmark.get('x', 0.0), landmark.get('y', 0.0), landmark.get('z', 0.0)
+                ])
             else:
-                # Handle missing or None landmarks
-                # print(f"Warning: Landmark at index {idx} missing or None for client {client_id}. Using zeros.")
+                # Handle missing, None, or incorrect type landmarks
                 flat_landmarks.extend([0.0, 0.0, 0.0])
 
-        # Ensure exactly 36 values, even if processing failed for some landmarks
-        if len(flat_landmarks) != 36:
-            print(f"Warning: Landmark processing for client {client_id} resulted in {len(flat_landmarks)} values, expected 36. Padding/truncating.")
-            flat_landmarks = (flat_landmarks + [0.0]*36)[:36] # Ensure exactly 36 float values
+        # Ensure exactly 36 values
+        if len(flat_landmarks) != FLAT_LANDMARK_SIZE:
+            print(f"Warning: Landmark processing for client {client_id} resulted in {len(flat_landmarks)} values, expected {FLAT_LANDMARK_SIZE}. Padding/truncating.")
+            flat_landmarks = (flat_landmarks + [0.0]*FLAT_LANDMARK_SIZE)[:FLAT_LANDMARK_SIZE]
 
-        flat_landmarks_np = np.array(flat_landmarks, dtype=float) # Convert to numpy array for processing
+        flat_landmarks_np = np.array(flat_landmarks, dtype=float)
 
-        # --- Predict Workout Type using LSTM model ---
-        workout_type = 12 # Default to plank if classifier fails or isn't loaded
-        predicted_workout_name = "plank (default)"
-        
-        if workout_classifier and feature_scaler and label_encoder:
-            try:
-                # Scale the features
-                scaled_features = feature_scaler.transform(flat_landmarks_np.reshape(1, -1))
-                
-                # Convert to PyTorch tensor
-                features_tensor = torch.FloatTensor(scaled_features).to(device)
-                
-                # Make prediction
-                prediction_start = time.time()
-                with torch.no_grad():
-                    outputs = workout_classifier(features_tensor)
-                    _, predicted_idx = torch.max(outputs, 1)
-                    predicted_idx = predicted_idx.item()
-                
-                # Convert index to original label
-                predicted_label = label_encoder.inverse_transform([predicted_idx])[0]
-                prediction_time = time.time() - prediction_start
-                
-                # Validate and use prediction
-                if predicted_label in workout_map:
-                    workout_type = int(predicted_label)  # Convert to int
-                    predicted_workout_name = workout_map[workout_type]
-                    print(f"Predicted workout for client {client_id}: {workout_type} ({predicted_workout_name})")
-                else:
-                    print(f"Warning: LSTM classifier predicted an invalid label ({predicted_label}) for client {client_id}. Defaulting to plank (12).")
-                    workout_type = 12  # Fallback to default
-                    predicted_workout_name = "plank (invalid prediction)"
-                
-            except Exception as e:
-                print(f"Error during LSTM workout classification for client {client_id}: {e}. Defaulting to plank (12).")
-                workout_type = 12 # Fallback to default
-                predicted_workout_name = "plank (prediction error)"
-        else:
-            print(f"LSTM workout classifier components not loaded. Defaulting to plank (12) for client {client_id}.")
-            # workout_type remains 12 (default)
-            
+        # --- Predict Workout Type (using workout buffer/scaler) ---
+        workout_type_index, predicted_workout_name = predict_workout_from_sequence(client_id, flat_landmarks_np)
+
         # --- Predict Muscle Group ---
-        # Define muscle group mapping (should match frontend)
-        muscle_group_map = {
-            1: "shoulders",
-            2: "chest",
-            3: "biceps",
-            4: "core",
-            5: "triceps",
-            6: "legs",
-            7: "back"
-        }
-        
-        # Default to no muscle group if classifier fails
-        muscle_group = 0
-        predicted_muscle_group = "none (default)"
-        
-        if muscle_group_classifier:
-            try:
-                # Use the same features as for workout classification
-                features_for_muscle = flat_landmarks_np.reshape(1, -1)
-                
-                # Predict muscle group
-                muscle_prediction_start = time.time()
-                predicted_muscle_label = muscle_group_classifier.predict(features_for_muscle)[0]
-                muscle_prediction_time = time.time() - muscle_prediction_start
-                
-                # Validate and use prediction
-                if predicted_muscle_label in muscle_group_map:
-                    muscle_group = int(predicted_muscle_label)
-                    predicted_muscle_group = muscle_group_map[muscle_group]
-                    print(f"Predicted muscle group for client {client_id}: {muscle_group} ({predicted_muscle_group})")
-                else:
-                    print(f"Warning: Muscle group classifier predicted an invalid label ({predicted_muscle_label}) for client {client_id}.")
-                    muscle_group = 0
-                    predicted_muscle_group = "none (invalid prediction)"
-                    
-            except Exception as e:
-                print(f"Error during muscle group classification for client {client_id}: {e}")
-                muscle_group = 0
-                predicted_muscle_group = "none (prediction error)"
-        else:
-            print(f"Muscle group classifier not loaded. No muscle group prediction for client {client_id}.")
+        muscle_group_index, predicted_muscle_group_name = predict_muscle_group_from_sequence(
+            client_id, flat_landmarks_np, workout_type_index)
 
-        # --- Get Pose Corrections (Handles Throttling) ---
-        # Pass the *original* flat_landmarks (36 values) and the *predicted* workout_type
-        corrections_array = get_pose_corrections(flat_landmarks_np, workout_type)
+        # --- Get Pose Corrections (using correction buffer/scaler) ---
+        # Use the selected workout if provided, otherwise use the predicted one
+        correction_workout_type = selected_workout if selected_workout is not None else workout_type_index
+        corrections_array = get_pose_corrections(flat_landmarks_np, correction_workout_type)
 
-        # If throttled (returns None), stop processing this message
+        # If throttled or buffer not ready (returns None or Zeros), stop processing this message
         if corrections_array is None:
-            # print(f"Skipping emit for client {client_id} due to backend throttle.") # Optional log
+            # print(f"Correction throttled for {client_id}") # Optional debug
             return
+        if np.all(corrections_array == 0):
+             # Buffer might not be full, or model isn't loaded - don't emit zero corrections unless intended
+             # print(f"Zero corrections returned for {client_id}, likely buffer not full or model issue.") # Optional debug
+             # We might still want to emit workout/muscle group info even if corrections are zero
+             pass # Continue to emit, but corrections will be zero
 
-        # Update last processed time *only* when inference was successful
+        # Update last processed time *only* when inference was attempted (even if buffer wasn't full)
         last_processed_time[client_id] = now
 
         # --- Prepare Correction Data for Frontend ---
         correction_data = {}
-        significant_correction_found = False # Flag to check if any value is non-trivial
-        for i, original_landmark_idx in enumerate(selected_indices):
-            # Map the flattened index (i) back to the 36-element correction array
-            base_idx = i * 3
-            if (base_idx + 2) < len(corrections_array):
-                 # Basic check for NaN or infinity, replace with 0 if found
+        for i, original_landmark_idx in enumerate(BODY_KEYPOINTS_INDICES):
+            base_idx = i * LANDMARK_DIM
+            if (base_idx + LANDMARK_DIM -1) < len(corrections_array):
                 x_corr = float(corrections_array[base_idx]) if np.isfinite(corrections_array[base_idx]) else 0.0
                 y_corr = float(corrections_array[base_idx+1]) if np.isfinite(corrections_array[base_idx+1]) else 0.0
                 z_corr = float(corrections_array[base_idx+2]) if np.isfinite(corrections_array[base_idx+2]) else 0.0
                 correction_data[str(original_landmark_idx)] = {'x': x_corr, 'y': y_corr, 'z': z_corr}
-                # Check if this correction is significant (for logging purposes)
-                if abs(x_corr) > 0.001 or abs(y_corr) > 0.001 or abs(z_corr) > 0.001: # Check all axes
-                    significant_correction_found = True
             else:
-                print(f"Warning: Index out of bounds ({base_idx + 2} >= {len(corrections_array)}) when processing corrections for joint {original_landmark_idx}")
+                print(f"Warning: Index out of bounds when formatting corrections for joint {original_landmark_idx}")
                 correction_data[str(original_landmark_idx)] = {'x': 0.0, 'y': 0.0, 'z': 0.0}
 
         # Add predicted workout type and muscle group to correction data
-        correction_data['predicted_workout_type'] = workout_type
-        correction_data['predicted_muscle_group'] = muscle_group
+        correction_data['predicted_workout_type'] = workout_type_index
+        correction_data['predicted_muscle_group'] = muscle_group_index
+        # Optionally add names for debugging/display
+        correction_data['predicted_workout_name'] = predicted_workout_name
+        correction_data['predicted_muscle_group_name'] = predicted_muscle_group_name
 
-        # --- Logging and Emitting ---
-        emit_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+        # Add sequence info for debugging
+        correction_data['correction_sequence_len'] = len(client_pose_buffers.get(client_id, []))
+        correction_data['target_correction_sequence_len'] = SEQUENCE_LENGTH
+        correction_data['workout_sequence_len'] = len(client_pose_buffers.get(client_id, []))
+        correction_data['target_workout_sequence_len'] = workout_classifier_config.get('sequence_length', SEQUENCE_LENGTH)
 
-        # Log details before emitting
-        # print(f"--- Emit Details for client {client_id} at {emit_timestamp} ---")
-        # print(f"Workout Used: {workout_type} ({predicted_workout_name})")
-        # print(f"Muscle Group: {muscle_group} ({predicted_muscle_group})")
-        # print(f"Raw corrections array: {corrections_array}") # Can be verbose
-        # print(f"Formatted correction_data: {json.dumps(correction_data)}")
-        # if not significant_correction_found:
-        #      print(f"Note: No correction values significantly different from zero found.")
-        # print(f"--- End Emit Details ---")
-
-        # Send corrections back to client
+        # --- Emitting ---
+        # emit_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3] # Optional
         emit('pose_corrections', correction_data)
 
         # Log processing time if slow
         process_time = time.time() - process_start
-        if process_time > 0.2: # Log if processing takes > 200ms
-            print(f"Slow processing cycle for client {client_id}: {process_time:.3f}s (Workout: {predicted_workout_name}, Muscle: {predicted_muscle_group})")
+        if process_time > 0.2:
+            print(f"Slow processing cycle for client {client_id}: {process_time:.3f}s (Workout: {predicted_workout_name}, Muscle: {predicted_muscle_group_name})")
 
     except Exception as e:
-        # Log any exceptions during processing
         print(f"Error processing pose data for client {client_id}: {e}")
-        # Optionally send an error back to the specific client
+        import traceback
+        traceback.print_exc() # Print full traceback for debugging
         try:
             emit('error', {'message': f'Backend error processing pose data: {str(e)}'})
         except Exception as emit_error:
@@ -561,7 +742,7 @@ def handle_pose_data(data):
 @app.route('/')
 def index():
     """Basic route to confirm the server is running."""
-    return "Pose Correction WebSocket Server with LSTM Workout Classification is running."
+    return "Pose Correction WebSocket Server with Sequential LSTM Workout Classification is running."
 
 # --- Main Execution ---
 if __name__ == '__main__':
@@ -588,6 +769,7 @@ if __name__ == '__main__':
         # Allow server to start but muscle group detection won't work
 
     print(f"Starting WebSocket server on http://0.0.0.0:8001 (using {device})")
+    print(f"Using sequence length of {SEQUENCE_LENGTH} frames for workout classification")
 
     # Run the server using the determined async_mode
     # The host/port arguments are passed directly to socketio.run
