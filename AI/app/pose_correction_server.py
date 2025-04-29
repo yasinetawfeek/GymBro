@@ -26,6 +26,18 @@ from datetime import datetime # Import datetime for formatted timestamp
 from sklearn.preprocessing import StandardScaler # Added for feature scaling
 from collections import deque # For sequence buffer management
 
+# --- Constants ---
+# Body keypoints indices from MediaPipe BlazePose (the key joints we're tracking)
+BODY_KEYPOINTS_INDICES = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]
+LANDMARK_DIM = 3  # x, y, z
+FLAT_LANDMARK_SIZE = len(BODY_KEYPOINTS_INDICES) * LANDMARK_DIM  # Should be 36
+
+# --- Config for sequence models ---
+# This will be populated when models are loaded
+workout_classifier_config = {
+    'sequence_length': 10  # Default value, may be overridden when model loads
+}
+
 # --- DNN model class definition (Unchanged) ---
 class EnhancedPoseModel(nn.Module):
     def __init__(self, input_dim=37, hidden_dim=512, output_dim=36):
@@ -620,106 +632,107 @@ def handle_pose_data(data):
     """Handles incoming pose data, predicts workout, performs inference, and emits corrections."""
     client_id = request.sid
     now = time.time()
-    receive_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-    
+    # receive_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3] # Optional: for detailed logging
+
     # Check time since last *processed* request for logging long gaps
-    if client_id in last_processed_time and last_processed_time[client_id] != 0:
-        time_since_last_processed = now - last_processed_time[client_id]
-        if time_since_last_processed > 1.0:
-            print(f"Long gap between *processed* requests for client {client_id}: {time_since_last_processed:.2f}s")
+    # if client_id in last_processed_time and last_processed_time[client_id] != 0:
+    #     time_since_last_processed = now - last_processed_time[client_id]
+    #     if time_since_last_processed > 1.0:
+    #         print(f"Long gap between *processed* requests for client {client_id}: {time_since_last_processed:.2f}s")
 
     try:
         process_start = time.time()
         landmarks = data.get('landmarks', [])
+        # Get selected workout from frontend if provided, otherwise default to None
+        selected_workout = data.get('selected_workout')
+        
         if not landmarks:
             print(f"Warning: Received empty landmarks list from {client_id}.")
-            return # Stop processing if landmarks are missing
+            return
 
         # --- Landmark Processing (Extract relevant coordinates) ---
         flat_landmarks = []
-        selected_indices = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28] # Indices from MediaPipe
-        for idx in selected_indices:
-            if idx < len(landmarks) and landmarks[idx] is not None:
+        for idx in BODY_KEYPOINTS_INDICES:
+            if idx < len(landmarks) and landmarks[idx] is not None and isinstance(landmarks[idx], dict):
                 landmark = landmarks[idx]
-                if isinstance(landmark, dict):
-                    # Ensure keys exist, default to 0 if missing
-                    flat_landmarks.extend([
-                        landmark.get('x', 0.0),
-                        landmark.get('y', 0.0),
-                        landmark.get('z', 0.0)
-                    ])
-                else:
-                     print(f"Warning: Landmark at index {idx} from client {client_id} is not a dictionary: {landmark}. Using zeros.")
-                     flat_landmarks.extend([0.0, 0.0, 0.0])
+                flat_landmarks.extend([
+                    landmark.get('x', 0.0), landmark.get('y', 0.0), landmark.get('z', 0.0)
+                ])
             else:
-                # Handle missing or None landmarks
+                # Handle missing, None, or incorrect type landmarks
                 flat_landmarks.extend([0.0, 0.0, 0.0])
 
-        # Ensure exactly 36 values, even if processing failed for some landmarks
-        if len(flat_landmarks) != 36:
-            print(f"Warning: Landmark processing for client {client_id} resulted in {len(flat_landmarks)} values, expected 36. Padding/truncating.")
-            flat_landmarks = (flat_landmarks + [0.0]*36)[:36] # Ensure exactly 36 float values
+        # Ensure exactly 36 values
+        if len(flat_landmarks) != FLAT_LANDMARK_SIZE:
+            print(f"Warning: Landmark processing for client {client_id} resulted in {len(flat_landmarks)} values, expected {FLAT_LANDMARK_SIZE}. Padding/truncating.")
+            flat_landmarks = (flat_landmarks + [0.0]*FLAT_LANDMARK_SIZE)[:FLAT_LANDMARK_SIZE]
 
-        flat_landmarks_np = np.array(flat_landmarks, dtype=float) # Convert to numpy array for processing
+        flat_landmarks_np = np.array(flat_landmarks, dtype=float)
 
-        # --- Predict Workout Type using sequence-based LSTM model (NEW) ---
-        workout_type, predicted_workout_name = predict_workout_from_sequence(client_id, flat_landmarks_np)
-        
-        # --- Predict Muscle Group using sequence and workout (NEW) ---
-        muscle_group, predicted_muscle_group = predict_muscle_group_from_sequence(
-            client_id, flat_landmarks_np, workout_type)
-        
-        # --- Get Pose Corrections (Handles Throttling) ---
-        # Pass the *original* flat_landmarks (36 values) and the *predicted* workout_type
-        corrections_array = get_pose_corrections(flat_landmarks_np, workout_type)
+        # --- Predict Workout Type (using workout buffer/scaler) ---
+        workout_type_index, predicted_workout_name = predict_workout_from_sequence(client_id, flat_landmarks_np)
 
-        # If throttled (returns None), stop processing this message
+        # --- Predict Muscle Group ---
+        muscle_group_index, predicted_muscle_group_name = predict_muscle_group_from_sequence(
+            client_id, flat_landmarks_np, workout_type_index)
+
+        # --- Get Pose Corrections (using correction buffer/scaler) ---
+        # Use the selected workout if provided, otherwise use the predicted one
+        correction_workout_type = selected_workout if selected_workout is not None else workout_type_index
+        corrections_array = get_pose_corrections(flat_landmarks_np, correction_workout_type)
+
+        # If throttled or buffer not ready (returns None or Zeros), stop processing this message
         if corrections_array is None:
+            # print(f"Correction throttled for {client_id}") # Optional debug
             return
+        if np.all(corrections_array == 0):
+             # Buffer might not be full, or model isn't loaded - don't emit zero corrections unless intended
+             # print(f"Zero corrections returned for {client_id}, likely buffer not full or model issue.") # Optional debug
+             # We might still want to emit workout/muscle group info even if corrections are zero
+             pass # Continue to emit, but corrections will be zero
 
-        # Update last processed time *only* when inference was successful
+        # Update last processed time *only* when inference was attempted (even if buffer wasn't full)
         last_processed_time[client_id] = now
 
         # --- Prepare Correction Data for Frontend ---
         correction_data = {}
-        significant_correction_found = False # Flag to check if any value is non-trivial
-        for i, original_landmark_idx in enumerate(selected_indices):
-            # Map the flattened index (i) back to the 36-element correction array
-            base_idx = i * 3
-            if (base_idx + 2) < len(corrections_array):
-                 # Basic check for NaN or infinity, replace with 0 if found
+        for i, original_landmark_idx in enumerate(BODY_KEYPOINTS_INDICES):
+            base_idx = i * LANDMARK_DIM
+            if (base_idx + LANDMARK_DIM -1) < len(corrections_array):
                 x_corr = float(corrections_array[base_idx]) if np.isfinite(corrections_array[base_idx]) else 0.0
                 y_corr = float(corrections_array[base_idx+1]) if np.isfinite(corrections_array[base_idx+1]) else 0.0
                 z_corr = float(corrections_array[base_idx+2]) if np.isfinite(corrections_array[base_idx+2]) else 0.0
                 correction_data[str(original_landmark_idx)] = {'x': x_corr, 'y': y_corr, 'z': z_corr}
-                # Check if this correction is significant (for logging purposes)
-                if abs(x_corr) > 0.001 or abs(y_corr) > 0.001 or abs(z_corr) > 0.001: # Check all axes
-                    significant_correction_found = True
             else:
-                print(f"Warning: Index out of bounds ({base_idx + 2} >= {len(corrections_array)}) when processing corrections for joint {original_landmark_idx}")
+                print(f"Warning: Index out of bounds when formatting corrections for joint {original_landmark_idx}")
                 correction_data[str(original_landmark_idx)] = {'x': 0.0, 'y': 0.0, 'z': 0.0}
 
         # Add predicted workout type and muscle group to correction data
-        correction_data['predicted_workout_type'] = workout_type
-        correction_data['predicted_muscle_group'] = muscle_group
-        
+        correction_data['predicted_workout_type'] = workout_type_index
+        correction_data['predicted_muscle_group'] = muscle_group_index
+        # Optionally add names for debugging/display
+        correction_data['predicted_workout_name'] = predicted_workout_name
+        correction_data['predicted_muscle_group_name'] = predicted_muscle_group_name
+
         # Add sequence info for debugging
-        correction_data['sequence_length'] = len(client_pose_buffers.get(client_id, [])) 
-        correction_data['target_sequence_length'] = SEQUENCE_LENGTH
+        correction_data['correction_sequence_len'] = len(client_pose_buffers.get(client_id, []))
+        correction_data['target_correction_sequence_len'] = SEQUENCE_LENGTH
+        correction_data['workout_sequence_len'] = len(client_pose_buffers.get(client_id, []))
+        correction_data['target_workout_sequence_len'] = workout_classifier_config.get('sequence_length', SEQUENCE_LENGTH)
 
         # --- Emitting ---
-        emit_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+        # emit_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3] # Optional
         emit('pose_corrections', correction_data)
 
         # Log processing time if slow
         process_time = time.time() - process_start
-        if process_time > 0.2: # Log if processing takes > 200ms
-            print(f"Slow processing cycle for client {client_id}: {process_time:.3f}s (Workout: {predicted_workout_name}, Muscle: {predicted_muscle_group})")
+        if process_time > 0.2:
+            print(f"Slow processing cycle for client {client_id}: {process_time:.3f}s (Workout: {predicted_workout_name}, Muscle: {predicted_muscle_group_name})")
 
     except Exception as e:
-        # Log any exceptions during processing
         print(f"Error processing pose data for client {client_id}: {e}")
-        # Optionally send an error back to the specific client
+        import traceback
+        traceback.print_exc() # Print full traceback for debugging
         try:
             emit('error', {'message': f'Backend error processing pose data: {str(e)}'})
         except Exception as emit_error:

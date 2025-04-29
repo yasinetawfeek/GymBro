@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-// Assuming NavBar is correctly located at '../components/Navbar'
-// If not, adjust the import path.
-// import NavBar from '../components/Navbar';
-import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import * as poseDetection from '@mediapipe/pose';
 import { POSE_CONNECTIONS } from '@mediapipe/pose';
 import { Camera } from '@mediapipe/camera_utils';
@@ -10,8 +7,25 @@ import io from 'socket.io-client';
 // Import React Body Highlighter
 import Model from 'react-body-highlighter';
 import { MuscleType, ModelType } from 'react-body-highlighter';
+import { useNavigate } from 'react-router-dom';
 
-// Uncomment NavBar import
+// Lucide icons for a more consistent look
+import { 
+  FullscreenIcon, 
+  MinimizeIcon, 
+  XCircle, 
+  Check, 
+  AlertTriangle, 
+  Info, 
+  Eye, 
+  EyeOff, 
+  RefreshCw, 
+  ChevronDown, 
+  ChevronUp, 
+  Zap
+} from 'lucide-react';
+
+// Import NavBar
 import NavBar from '../components/Navbar';
 
 // Add workout mapping (matching the backend)
@@ -42,16 +56,16 @@ const workoutMap = {
 
 // Define muscle group mapping
 const muscleGroupMap = {
-  1: "shoulders",
-  2: "chest",
-  3: "biceps",
-  4: "core",
-  5: "triceps",
-  6: "legs",
-  7: "back"
+  1: "Shoulders",
+  2: "Chest",
+  3: "Biceps",
+  4: "Core",
+  5: "Triceps",
+  6: "Legs",
+  7: "Back"
 };
 
-// --- Utility functions (Unchanged) ---
+// --- Utility functions ---
 const getJointName = (index) => {
   switch(index) {
     case 11: return "Left Shoulder"; case 12: return "Right Shoulder"; case 13: return "Left Elbow";
@@ -61,11 +75,13 @@ const getJointName = (index) => {
     default: return "";
   }
 };
+
 const getArrowColor = (distance) => {
   if (distance < 0.05) return '#eab308'; // yellow
   else if (distance < 0.1) return '#f97316'; // orange
   else return '#ef4444'; // red
 };
+
 const drawArrow = (ctx, fromX, fromY, toX, toY, color, lineWidth) => {
   const headLength = 15; const dx = toX - fromX; const dy = toY - fromY;
   const angle = Math.atan2(dy, dx); ctx.beginPath(); ctx.moveTo(fromX, fromY);
@@ -76,7 +92,7 @@ const drawArrow = (ctx, fromX, fromY, toX, toY, color, lineWidth) => {
   ctx.closePath(); ctx.fillStyle = color; ctx.fill();
 };
 
-// --- Drawing functions (Unchanged) ---
+// --- Drawing functions ---
 const drawUserPose = (ctx, landmarks, canvasWidth, canvasHeight) => {
   if (!landmarks) return;
   for (let i = 11; i < landmarks.length; i++) {
@@ -95,8 +111,8 @@ const drawUserPose = (ctx, landmarks, canvasWidth, canvasHeight) => {
     }
   });
 };
+
 const findJointsToCorrect = (landmarks, corrections) => {
-  // Use the corrections object passed directly (likely from a ref now)
   if (!landmarks || !corrections || Object.keys(corrections).length === 0) { return []; }
   const correctJoints = [];
   Object.keys(corrections).forEach(indexStr => {
@@ -110,16 +126,15 @@ const findJointsToCorrect = (landmarks, corrections) => {
   });
   return correctJoints;
 };
+
 const drawCorrectionArrows = (ctx, landmarks, corrections, jointsToCorrect, canvasWidth, canvasHeight) => {
-   // Use the corrections object passed directly (likely from a ref now)
   if (!landmarks || !corrections || jointsToCorrect.length === 0) { return; }
   jointsToCorrect.forEach(joint => {
     const i = joint.index;
-    if (!landmarks[i] || landmarks[i].x == null || landmarks[i].y == null) { console.warn(`[drawCorrectionArrows] Skipping arrow for joint ${joint.name} (index ${i}): Landmark invalid.`); return; }
+    if (!landmarks[i] || landmarks[i].x == null || landmarks[i].y == null) { return; }
     const originalX = landmarks[i].x * canvasWidth; const originalY = landmarks[i].y * canvasHeight;
-    // Get the specific correction for this joint from the passed corrections object
-    const correction = corrections[String(i)]; // Ensure key is string if needed
-    if (!correction || correction.x == null || correction.y == null) { console.warn(`[drawCorrectionArrows] Skipping arrow for joint ${joint.name} (index ${i}): Correction data invalid or missing.`); return; }
+    const correction = corrections[String(i)];
+    if (!correction || correction.x == null || correction.y == null) { return; }
     const vectorX = correction.x * canvasWidth; const vectorY = correction.y * canvasHeight;
     const targetX = originalX + vectorX; const targetY = originalY + vectorY;
     const extendedTargetX = originalX + vectorX * 1.5; const extendedTargetY = originalY + vectorY * 1.5;
@@ -129,56 +144,146 @@ const drawCorrectionArrows = (ctx, landmarks, corrections, jointsToCorrect, canv
   });
 };
 
-// --- UI Components (Unchanged) ---
-const ConnectionStatus = ({ status }) => { 
-  const statusColors = { connected: "bg-green-500", connecting: "bg-yellow-500", disconnected: "bg-red-500" }; 
-  return ( <div className="absolute top-4 right-4 flex items-center space-x-2 z-40"><div className={`w-4 h-4 rounded-full ${statusColors[status]}`}></div><span className="text-xs font-medium text-white bg-black/30 px-2 py-1 rounded">{status === "connected" ? "Connected" : status === "connecting" ? "Connecting..." : "Disconnected"}</span></div> ); 
+// --- UI Components ---
+
+// Animation variants
+const fadeIn = {
+  hidden: { opacity: 0 },
+  visible: { 
+    opacity: 1,
+    transition: { duration: 0.4 }
+  },
+  exit: { 
+    opacity: 0,
+    transition: { duration: 0.2 }
+  }
 };
 
-// Add new Fullscreen Button component
+const slideUp = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    transition: { duration: 0.4 }
+  },
+  exit: { 
+    opacity: 0, 
+    y: 20,
+    transition: { duration: 0.2 }
+  }
+};
+
+const ConnectionStatus = ({ status }) => {
+  const statusInfo = {
+    connected: {
+      color: "bg-green-500", 
+      text: "Connected",
+      icon: <Check className="w-3 h-3 text-green-500" />
+    },
+    connecting: {
+      color: "bg-yellow-500", 
+      text: "Connecting...",
+      icon: <RefreshCw className="w-3 h-3 text-yellow-500 animate-spin" />
+    },
+    disconnected: {
+      color: "bg-red-500", 
+      text: "Disconnected",
+      icon: <XCircle className="w-3 h-3 text-red-500" />
+    }
+  };
+  
+  const { color, text, icon } = statusInfo[status];
+  
+  return (
+    <motion.div 
+      className="absolute top-4 right-4 z-40"
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.3 }}
+    >
+      <div className="flex items-center space-x-2 bg-black/40 backdrop-blur-sm text-white px-3 py-2 rounded-lg shadow-lg">
+        <div className={`w-2 h-2 rounded-full ${color}`}></div>
+        <span className="text-xs font-medium">{text}</span>
+        <div className="ml-1">{icon}</div>
+      </div>
+    </motion.div>
+  );
+};
+
 const FullscreenButton = ({ isFullscreen, toggleFullscreen }) => {
   return (
-    <button 
+    <motion.button 
       onClick={toggleFullscreen}
-      className="absolute top-4 left-4 z-40 bg-black/40 hover:bg-black/60 text-white p-2 rounded-lg transition-colors"
+      className="absolute top-4 left-4 z-40 bg-black/40 hover:bg-black/60 text-white p-2.5 rounded-lg transition-colors backdrop-blur-sm shadow-lg"
       title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+      whileHover={{ scale: 1.1 }}
+      whileTap={{ scale: 0.9 }}
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.3 }}
     >
-      {isFullscreen ? (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M5 4a1 1 0 00-1 1v4a1 1 0 01-1 1H2a1 1 0 110-2h.59L1.3 6.7a1 1 0 111.4-1.4L4 6.59V6a1 1 0 011-1h4a1 1 0 110 2H7a1 1 0 01-1-1V4zM16 4a1 1 0 00-1 1v1a1 1 0 01-1 1h-2a1 1 0 110-2h.59l-1.3-1.3a1 1 0 111.42-1.4L14 3.59V4a1 1 0 011-1h1a1 1 0 010 2v-1zM15 12a1 1 0 011-1h1a1 1 0 110 2h-1a1 1 0 01-1-1v-1zM5 16a1 1 0 001 1h4a1 1 0 100-2H7.41l1.3-1.3a1 1 0 00-1.42-1.4L6 13.59V14a1 1 0 01-1 1H4a1 1 0 100 2h1z" clipRule="evenodd" />
-        </svg>
-      ) : (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 01-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V6.414l-2.293 2.293a1 1 0 11-1.414-1.414L13.586 5H12zm-9 7a1 1 0 012 0v1.586l2.293-2.293a1 1 0 111.414 1.414L6.414 15H8a1 1 0 010 2H4a1 1 0 01-1-1v-4zm13-1a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 010-2h1.586l-2.293-2.293a1 1 0 111.414-1.414L15 13.586V12a1 1 0 011-1z" clipRule="evenodd" />
-        </svg>
-      )}
-    </button>
+      {isFullscreen ? <MinimizeIcon className="w-5 h-5" /> : <FullscreenIcon className="w-5 h-5" />}
+    </motion.button>
   );
 };
 
-// Add workout selector component
-const WorkoutSelector = ({ selectedWorkout, onSelectWorkout, isFullscreen }) => {
+const WorkoutSelector = ({ selectedWorkout, onSelectWorkout }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  
   return (
-    <div className={`text-white ${isFullscreen ? 'absolute top-16 right-4 z-40' : 'text-center mb-4'}`}>
-      <label htmlFor="workout-select" className={`mr-2 ${isFullscreen ? 'text-white' : ''}`}>
-        Workout:
-      </label>
-      <select 
-        id="workout-select"
-        value={selectedWorkout}
-        onChange={(e) => onSelectWorkout(Number(e.target.value))}
-        className={`px-3 py-1 rounded-md ${isFullscreen ? 'bg-black/40 text-white border border-gray-500' : 'bg-white dark:bg-gray-700 border dark:border-gray-600'}`}
-      >
-        {Object.entries(workoutMap).map(([id, name]) => (
-          <option key={id} value={id}>{name}</option>
-        ))}
-      </select>
-    </div>
+    <motion.div 
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: 0.1 }}
+    >
+      <div className="relative">
+        <motion.button
+          onClick={() => setIsOpen(!isOpen)}
+          className="flex items-center space-x-2 bg-black/40 hover:bg-black/60 text-white px-4 py-2 rounded-lg transition-colors shadow-md backdrop-blur-sm border border-gray-600/30"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+        >
+          <span>{workoutMap[selectedWorkout]}</span>
+          {isOpen ? (
+            <ChevronUp className="w-4 h-4" />
+          ) : (
+            <ChevronDown className="w-4 h-4" />
+          )}
+        </motion.button>
+        
+        <AnimatePresence>
+          {isOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="absolute mt-1 left-0 right-0 max-h-60 overflow-y-auto bg-black/80 text-white border border-gray-600/30 rounded-lg shadow-xl z-50 backdrop-blur-md"
+            >
+              {Object.entries(workoutMap).map(([id, name]) => (
+                <div
+                  key={id}
+                  onClick={() => {
+                    onSelectWorkout(Number(id));
+                    setIsOpen(false);
+                  }}
+                  className={`px-4 py-2 cursor-pointer ${
+                    Number(id) === selectedWorkout
+                      ? 'bg-purple-500/30 text-purple-200'
+                      : ''
+                  } hover:bg-gray-700/50 transition-colors`}
+                >
+                  {name}
+                </div>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </motion.div>
   );
 };
 
-// New MuscleGroupVisualizer component
-const MuscleGroupVisualizer = ({ isVisible, isFullscreen, muscleGroup }) => {
+const MuscleGroupVisualizer = ({ isVisible, muscleGroup }) => {
   // Get the appropriate muscle data based on the current muscle group
   let muscleData;
   
@@ -231,51 +336,225 @@ const MuscleGroupVisualizer = ({ isVisible, isFullscreen, muscleGroup }) => {
   }
   
   // Now just check if we want to show the visualizer
-  return isVisible ? (
-    <>
-      {/* Front view - Left side */}
-      <div className={`absolute ${isFullscreen ? 'bottom-20 left-8' : 'bottom-20 left-4'} z-30 pointer-events-none w-[120px] sm:w-[180px] lg:w-[200px] max-w-[30vw]`}>
-        <Model 
-          data={muscleData}
-          type={ModelType.ANTERIOR}
-          highlightedColors={['#e65a5a']}
-          onClick={() => {}} // Empty handler to prevent errors
-        />
-      </div>
-      
-      {/* Back view - Right side */}
-      <div className={`absolute ${isFullscreen ? 'bottom-20 right-8' : 'bottom-20 right-4'} z-30 pointer-events-none w-[120px] sm:w-[180px] lg:w-[200px] max-w-[30vw]`}>
-        <Model 
-          data={muscleData}
-          type={ModelType.POSTERIOR}
-          highlightedColors={['#e65a5a']}
-          onClick={() => {}} // Empty handler to prevent errors
-        />
-      </div>
-    </>
-  ) : null;
+  return (
+    <AnimatePresence>
+      {isVisible && (
+        <>
+          {/* Front view - Left side */}
+          <motion.div 
+            className="absolute bottom-20 left-8 z-30 pointer-events-none w-[120px] sm:w-[180px] lg:w-[200px] max-w-[30vw]"
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            variants={fadeIn}
+          >
+            <Model 
+              data={muscleData}
+              type={ModelType.ANTERIOR}
+              highlightedColors={['#a855f7']}
+              onClick={() => {}} // Empty handler to prevent errors
+            />
+          </motion.div>
+          
+          {/* Back view - Right side */}
+          <motion.div 
+            className="absolute bottom-20 right-8 z-30 pointer-events-none w-[120px] sm:w-[180px] lg:w-[200px] max-w-[30vw]"
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            variants={fadeIn}
+          >
+            <Model 
+              data={muscleData}
+              type={ModelType.POSTERIOR}
+              highlightedColors={['#a855f7']}
+              onClick={() => {}} // Empty handler to prevent errors
+            />
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
 };
 
-// Add toggle button for muscle visualization
-const MuscleVisualizerToggle = ({ isVisible, toggleVisibility, isFullscreen }) => {
+const MuscleVisualizerToggle = ({ isVisible, toggleVisibility }) => {
   return (
-    <button 
+    <motion.button 
       onClick={toggleVisibility}
-      className={`absolute ${isFullscreen ? 'bottom-4 right-8' : 'bottom-4 right-4'} z-40 bg-black/40 hover:bg-black/60 text-white p-2 rounded-lg transition-colors`}
+      className={`absolute bottom-4 right-8 z-40 ${
+        isVisible 
+          ? 'bg-purple-600/70 hover:bg-purple-700/80' 
+          : 'bg-black/40 hover:bg-black/60'
+      } text-white p-2.5 rounded-lg transition-colors backdrop-blur-sm shadow-lg`}
       title={isVisible ? "Hide Muscle Activation" : "Show Muscle Activation"}
+      whileHover={{ scale: 1.1 }}
+      whileTap={{ scale: 0.9 }}
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.3 }}
     >
-      {isVisible ? (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-        </svg>
-      ) : (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M5 4a1 1 0 00-1 1v10a1 1 0 001 1h10a1 1 0 001-1V5a1 1 0 00-1-1H5zm0 2h10v8H5V6z" clipRule="evenodd" />
-          <path d="M7 9a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1z" />
-          <path d="M7 12a1 1 0 011-1h2a1 1 0 110 2H8a1 1 0 01-1-1z" />
-        </svg>
-      )}
-    </button>
+      {isVisible ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+    </motion.button>
+  );
+};
+
+const CustomNotification = ({ type, message, onClose }) => {
+  // Define color schemes based on notification type
+  const notificationConfig = {
+    success: {
+      bg: "bg-green-500/90",
+      border: "border-green-400",
+      icon: <Check className="w-5 h-5" />
+    },
+    info: {
+      bg: "bg-blue-500/90",
+      border: "border-blue-400",
+      icon: <Info className="w-5 h-5" />
+    },
+    warning: {
+      bg: "bg-yellow-500/90",
+      border: "border-yellow-400",
+      icon: <AlertTriangle className="w-5 h-5" />
+    },
+    error: {
+      bg: "bg-red-500/90",
+      border: "border-red-400",
+      icon: <XCircle className="w-5 h-5" />
+    }
+  };
+
+  // Use info as default type
+  const config = notificationConfig[type] || notificationConfig.info;
+  
+  return (
+    <motion.div 
+      className={`${config.bg} backdrop-blur-md text-white rounded-lg shadow-lg overflow-hidden mb-4 border-l-4 ${config.border}`}
+      initial={{ opacity: 0, x: 50 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 50 }}
+      transition={{ duration: 0.3 }}
+    >
+      <div className="flex items-start p-4">
+        <div className="flex-shrink-0 mr-3">
+          {config.icon}
+        </div>
+        <div className="flex-grow">
+          <p className="font-medium">{message}</p>
+        </div>
+        <button 
+          onClick={onClose}
+          className="flex-shrink-0 ml-3 p-1 rounded-full hover:bg-white/20 transition-colors"
+        >
+          <XCircle className="w-5 h-5" />
+        </button>
+      </div>
+    </motion.div>
+  );
+};
+
+const InfoPanel = ({ 
+  currentWorkout, 
+  predictedWorkout, 
+  predictionConfidence, 
+  predictionThreshold,
+  predictedMuscleGroup,
+  muscleGroupConfidence,
+  feedbackLatency,
+  receivedCount,
+  connectionStatus
+}) => {
+  return (
+    <motion.div 
+      className="bg-black/60 text-white px-5 py-3 rounded-xl backdrop-blur-md border border-white/10 shadow-lg"
+      initial="hidden"
+      animate="visible"
+      variants={slideUp}
+    >
+      <div className="flex flex-col space-y-2">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center">
+            <span className="text-sm font-medium opacity-70">Current:</span>
+            <span className="ml-2 font-semibold">{workoutMap[currentWorkout]}</span>
+          </div>          
+        </div>
+
+        {predictedWorkout !== currentWorkout && (
+            <div className="flex items-center">
+              <span className="text-sm font-medium opacity-70">Suggested:</span>
+              <span className={`ml-2 px-2 py-0.5 rounded-full text-sm ${
+                predictionConfidence > predictionThreshold 
+                  ? 'bg-purple-500/30 text-purple-200 border border-purple-500/30' 
+                  : 'bg-gray-500/30 text-gray-200 border border-gray-500/30'
+              }`}>
+                {workoutMap[predictedWorkout]}
+              </span>
+              {predictionConfidence > 0 && (
+                <div className="ml-2 flex items-center">
+                  <div className="w-4 h-1 bg-gray-700/50 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full ${
+                        predictionConfidence > predictionThreshold ? 'bg-purple-500' : 'bg-gray-500'
+                      }`}
+                      style={{ width: `${predictionConfidence * 100}%` }}
+                    ></div>
+                  </div>
+                  <span className={`ml-1 text-xs ${
+                    predictionConfidence > predictionThreshold ? 'text-purple-300' : 'opacity-60'
+                  }`}>
+                    {Math.round(predictionConfidence * 100)}%
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        
+        {predictedMuscleGroup > 0 && (
+          <div className="flex items-center">
+            <span className="text-sm font-medium opacity-70">Muscle Group:</span>
+            <div className="flex items-center ml-2">
+              <Zap className={`w-4 h-4 mr-1 ${
+                muscleGroupConfidence > predictionThreshold ? 'text-purple-400' : 'opacity-60'
+              }`} />
+              <span className="font-semibold">{muscleGroupMap[predictedMuscleGroup]}</span>
+              {muscleGroupConfidence > 0 && (
+                <div className="ml-2 flex items-center">
+                  <div className="w-4 h-1 bg-gray-700/50 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full ${
+                        muscleGroupConfidence > predictionThreshold ? 'bg-purple-500' : 'bg-gray-500'
+                      }`}
+                      style={{ width: `${muscleGroupConfidence * 100}%` }}
+                    ></div>
+                  </div>
+                  <span className={`ml-1 text-xs ${
+                    muscleGroupConfidence > predictionThreshold ? 'text-purple-300' : 'opacity-60'
+                  }`}>
+                    {Math.round(muscleGroupConfidence * 100)}%
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        
+        <div className="flex items-center justify-center text-xs opacity-60 space-x-4">
+          {(feedbackLatency > 0 || receivedCount > 0) && (
+            <>
+              <span>Latency: {feedbackLatency > 0 ? `${feedbackLatency}ms` : 'N/A'}</span>
+              <span>Corrections: {receivedCount}</span>
+            </>
+          )}
+          <span className="flex items-center">
+            <div className={`w-1.5 h-1.5 rounded-full mr-1 ${
+              connectionStatus === 'connected' ? 'bg-green-500' : 
+              connectionStatus === 'connecting' ? 'bg-yellow-500' : 
+              'bg-red-500'
+            }`}></div>
+            {connectionStatus}
+          </span>
+        </div>
+      </div>
+    </motion.div>
   );
 };
 
@@ -306,8 +585,10 @@ const TrainingPage = () => {
   // Modified workout prediction state
   const [predictedWorkout, setPredictedWorkout] = useState(12); // Default to plank (12)
   
-  // Add state for manually selected workout (default to predicted)
-  const [selectedWorkout, setSelectedWorkout] = useState(12); // Default to plank (12)
+  // Replace the selectedWorkout state with currentWorkout
+  const [currentWorkout, setCurrentWorkout] = useState(12); // Default to plank (12)
+  // Add ref to track current workout synchronously
+  const currentWorkoutRef = useRef(12);
   
   // Add state for muscle group prediction
   const [predictedMuscleGroup, setPredictedMuscleGroup] = useState(0); // Default to none
@@ -325,14 +606,99 @@ const TrainingPage = () => {
   // Add state to track overall confidence
   const [predictionConfidence, setPredictionConfidence] = useState(0);
   
-  // Add handler for workout selection change
-  const handleWorkoutChange = (workoutId) => {
-    setSelectedWorkout(Number(workoutId));
+  // Modify the notification system variables
+  const SUGGESTION_THRESHOLD = 0.8; // Higher threshold for suggestions
+  const AUTO_CHANGE_THRESHOLD = 0.95; // Very high threshold for auto-changing (increased)
+  const AUTO_CHANGE_CONSECUTIVE_FRAMES = 40; // Need consistent prediction for ~2 seconds (increased)
+  const MIN_SUGGESTION_COUNT = 15; // Require at least ~0.75 seconds of consistent detection before suggesting
+  const [suggestionCounts, setSuggestionCounts] = useState({});
+  const [lastSuggestedWorkout, setLastSuggestedWorkout] = useState(null);
+  const [lastNotificationTime, setLastNotificationTime] = useState(0);
+  // Add a ref to synchronously track the next allowed notification time
+  const nextAllowedChangeTimeRef = useRef(0);
+  const NOTIFICATION_COOLDOWN = 5000; // 20 seconds between notifications (doubled)
+  const [declinedWorkouts, setDeclinedWorkouts] = useState({}); // Track declined suggestions
+  const DECLINE_COOLDOWN = 60000; // 1 minute cooldown after declining a suggestion
+  
+  // Update the ratio window size from 15 seconds to 5 seconds
+  const RATIO_WINDOW_SIZE = 100; // Track ~5 seconds (100 frames at 50ms intervals)
+  const SUGGESTION_RATIO_THRESHOLD = 0.75; // Require 75% of recent predictions to be the same workout
+  const AUTO_CHANGE_RATIO_THRESHOLD = 0.85; // Require 85% for auto-change
+  const [workoutHistoryWindow, setWorkoutHistoryWindow] = useState([]); // Track history for ratio calculation
+  
+  // Add state for our custom notifications
+  const [notifications, setNotifications] = useState([]);
+  // Add notification queue
+  const [notificationQueue, setNotificationQueue] = useState([]);
+  const [isProcessingNotification, setIsProcessingNotification] = useState(false);
+  
+  // Function to add a notification to the queue
+  const addNotification = (notificationData) => {
+    const id = Date.now(); // Simple unique ID based on timestamp
+    
+    // Add to the queue instead of showing immediately
+    setNotificationQueue(prev => [...prev, { ...notificationData, id }]);
+    
+    return id; // Return the ID for reference
+  };
+  
+  // Process the notification queue
+  useEffect(() => {
+    if (notificationQueue.length > 0 && !isProcessingNotification) {
+      // Get the first notification from the queue
+      const nextNotification = notificationQueue[0];
+      
+      // Remove it from the queue
+      setNotificationQueue(prev => prev.slice(1));
+      
+      // Set the active notification
+      setNotifications([nextNotification]);
+      setIsProcessingNotification(true);
+      
+      // Set timeout to clear this notification
+      const timeout = nextNotification.autoClose || 3000;
+      setTimeout(() => {
+        setNotifications([]);
+        setIsProcessingNotification(false);
+      }, timeout);
+    }
+  }, [notificationQueue, isProcessingNotification]);
+  
+  // Fix the removeNotification function to be more robust
+  const removeNotification = (id) => {
+    setNotifications(prev => prev.filter(notification => notification.id !== id));
+    setIsProcessingNotification(false);
+  };
+  
+  // Update the clearAllNotifications function to clear everything
+  const clearAllNotifications = () => {
+    setNotifications([]);
+    setNotificationQueue([]);
+    setIsProcessingNotification(false);
+  };
+  
+  // Simplify handleWorkoutChange to just set the workout without tracking previous
+  const handleWorkoutChange = (newWorkoutId) => {
+    const parsedId = Number(newWorkoutId);
+    // Only call setCurrentWorkout once
+    setCurrentWorkout(parsedId);
+    // Update ref synchronously to always have the latest value
+    currentWorkoutRef.current = parsedId;
+    clearAllNotifications();
+    
+    // Update lastNotificationTime to prevent immediate new notifications
+    setLastNotificationTime(Date.now());
+    
+    // Log the NEW workout that's being set rather than the current one
+    console.log(`[Handle Workout Change] Changed from ${workoutMap[currentWorkout]} to ${workoutMap[parsedId]}`);
+    
+    // Also update the ref to ensure synchronous blocking of future changes
+    nextAllowedChangeTimeRef.current = Date.now() + NOTIFICATION_COOLDOWN;
   };
 
-  // Add new function to stabilize workout predictions
+  // Replace the updateStableWorkoutPrediction function with improved auto-change approach
   const updateStableWorkoutPrediction = (newPrediction) => {
-    // Update the array of recent predictions
+    // Update the recent predictions array for confidence calculation
     setRecentWorkoutPredictions(prev => {
       // Add new prediction and keep window size limited
       const updated = [...prev, newPrediction].slice(-PREDICTION_WINDOW_SIZE);
@@ -360,14 +726,85 @@ const TrainingPage = () => {
       // Store the confidence value for UI display
       setPredictionConfidence(confidence);
       
-      // Only update the displayed workout if confidence passes threshold
-      // or if it's the same as our current stable workout
-      if (confidence >= CONFIDENCE_THRESHOLD || mostFrequent === lastStableWorkoutRef.current) {
+      // Set the predicted workout type only if it's not the same as the current workout
+      if (mostFrequent !== currentWorkoutRef.current) {
         setPredictedWorkout(mostFrequent);
-        lastStableWorkoutRef.current = mostFrequent;
       }
       
       return updated;
+    });
+    
+    // Update longer history window for ratio-based suggestions
+    setWorkoutHistoryWindow(prev => {
+      // Keep the history window at RATIO_WINDOW_SIZE
+      const updatedHistory = [...prev, newPrediction].slice(-RATIO_WINDOW_SIZE);
+      
+      // Calculate the ratio of each workout type in the history window
+      const typeCount = {};
+      updatedHistory.forEach(type => {
+        typeCount[type] = (typeCount[type] || 0) + 1;
+      });
+      
+      // If the history window is sufficiently full (at least half capacity)
+      if (updatedHistory.length >= RATIO_WINDOW_SIZE / 2) {
+        // Get the workout with the highest count
+        let mostFrequentType = null;
+        let highestCount = 0;
+        
+        Object.entries(typeCount).forEach(([type, count]) => {
+          if (count > highestCount) {
+            highestCount = count;
+            mostFrequentType = Number(type);
+          }
+        });
+        
+        // Calculate the ratio of the most frequent workout
+        const ratio = highestCount / updatedHistory.length;
+        
+        // If we have a different workout than selected with high ratio
+        if (mostFrequentType !== currentWorkoutRef.current && ratio >= SUGGESTION_RATIO_THRESHOLD) {
+          const now = Date.now();
+          
+          // Check if we're past the cooldown period using the ref for synchronous checking
+          if (now >= nextAllowedChangeTimeRef.current) {
+            // Check if this workout was recently declined
+            const workoutKey = String(mostFrequentType);
+            const declineTime = declinedWorkouts[workoutKey] || 0;
+            const timeSinceDecline = now - declineTime;
+            
+            // Skip suggestion if recently declined
+            if (timeSinceDecline < DECLINE_COOLDOWN) {
+              return updatedHistory;
+            }
+            
+            // Immediately update the ref to block subsequent calls
+            nextAllowedChangeTimeRef.current = now + NOTIFICATION_COOLDOWN;
+            
+            // AUTO-CHANGE with notification when we detect a different workout with high confidence
+            // Only change workout if it's different from the current one
+            if (mostFrequentType !== currentWorkoutRef.current) {
+              console.log(`[Auto-Change] Detected different workout: ${workoutMap[mostFrequentType]}`);
+              // log current and predicted workout
+              console.log(`[Auto-Change] Current workout: ${workoutMap[currentWorkout]}`);
+              console.log(`[Auto-Change] Predicted workout: ${workoutMap[mostFrequentType]}`);
+              // Then handle the workout change
+              handleWorkoutChange(mostFrequentType);
+              
+              // Show notification about the change
+              addNotification({
+                type: 'info',
+                message: `Changed to ${workoutMap[mostFrequentType]}`,
+                autoClose: 3000
+              });
+              
+              setLastSuggestedWorkout(mostFrequentType);
+              setLastNotificationTime(now);
+            }
+          }
+        }
+      }
+      
+      return updatedHistory;
     });
   };
   
@@ -450,12 +887,23 @@ const TrainingPage = () => {
         reconnection: true, reconnectionAttempts: Infinity, reconnectionDelay: 1000,
         reconnectionDelayMax: 5000, timeout: 10000, transports: ['websocket']
       });
-      socketRef.current.on('connect', () => { console.log('[Socket Status] WebSocket connected. ID:', socketRef.current?.id); setConnectionStatus("connected"); });
-      socketRef.current.on('disconnect', (reason) => { console.warn('[Socket Status] WebSocket disconnected. Reason:', reason); setConnectionStatus("disconnected"); });
-      socketRef.current.on('connect_error', (error) => { console.error('[Socket Status] WebSocket connection error:', error); setConnectionStatus("disconnected"); });
-      socketRef.current.on('connected', (data) => { console.log('[Socket Event] Received "connected" confirmation:', data); });
+      socketRef.current.on('connect', () => { 
+        console.log('[Socket Status] WebSocket connected. ID:', socketRef.current?.id); 
+        setConnectionStatus("connected"); 
+      });
+      socketRef.current.on('disconnect', (reason) => { 
+        console.warn('[Socket Status] WebSocket disconnected. Reason:', reason); 
+        setConnectionStatus("disconnected"); 
+      });
+      socketRef.current.on('connect_error', (error) => { 
+        console.error('[Socket Status] WebSocket connection error:', error); 
+        setConnectionStatus("disconnected"); 
+      });
+      socketRef.current.on('connected', (data) => { 
+        console.log('[Socket Event] Received "connected" confirmation:', data); 
+      });
 
-      // --- MODIFIED CORRECTIONS HANDLER ---
+      // --- Corrections Handler ---
       socketRef.current.on('pose_corrections', (data) => {
         // Update the ref with the latest data immediately
         latestCorrectionsRef.current = data;
@@ -482,15 +930,25 @@ const TrainingPage = () => {
         setReceivedCount(prevCount => prevCount + 1);
         lastCorrectionTimeRef.current = now;
       });
-      // --- END MODIFIED HANDLER ---
+      // --- END Corrections Handler ---
 
-      socketRef.current.on('error', (data) => { console.error('[Socket Event] Received server error:', data.message || data); });
+      socketRef.current.on('error', (data) => { 
+        console.error('[Socket Event] Received server error:', data.message || data); 
+      });
     };
+    
     connectSocket();
-    return () => { if (socketRef.current) { console.log("[Socket Cleanup] Disconnecting WebSocket."); socketRef.current.disconnect(); socketRef.current = null; } };
+    
+    return () => { 
+      if (socketRef.current) { 
+        console.log("[Socket Cleanup] Disconnecting WebSocket."); 
+        socketRef.current.disconnect(); 
+        socketRef.current = null; 
+      } 
+    };
   }, []);
 
-  // --- Landmark Update Function (Unchanged) ---
+  // --- Landmark Update Function ---
   const updateLandmarks = (landmarks) => {
     if (landmarks && landmarks.length > 0) {
         setUserLandmarksForDrawing(landmarks);
@@ -512,17 +970,25 @@ const TrainingPage = () => {
       const socketIsConnected = socketRef.current?.connected;
       if (landmarksToSend && socketIsConnected) {
         const sendTimestamp = Date.now();
-        // Always send landmarks without a workout type, let backend predict it
+        // Send both landmarks and the selected workout type
         socketRef.current.emit('pose_data', { 
           landmarks: landmarksToSend, 
-          timestamp: sendTimestamp 
+          timestamp: sendTimestamp,
+          selected_workout: currentWorkout
         });
       }
     }, sendIntervalDelay);
-    return () => { if (sendIntervalRef.current) { console.log("[Data Send] Clearing send interval."); clearInterval(sendIntervalRef.current); sendIntervalRef.current = null; } };
-  }, []); // No dependencies needed now
+    
+    return () => { 
+      if (sendIntervalRef.current) { 
+        console.log("[Data Send] Clearing send interval."); 
+        clearInterval(sendIntervalRef.current); 
+        sendIntervalRef.current = null; 
+      } 
+    };
+  }, [currentWorkout]); // Add currentWorkout as a dependency
 
-  // --- Correction Timeout Check (Unchanged) ---
+  // --- Correction Timeout Check ---
   useEffect(() => {
     lastCorrectionTimeRef.current = 0;
     const checkInterval = 5000;
@@ -538,20 +1004,21 @@ const TrainingPage = () => {
           }
       }
     }, checkInterval);
+    
     return () => clearInterval(checkCorrectionTimeout);
   }, [connectionStatus]);
 
-  // Add dark mode toggle functionality
-  // Add function to toggle dark mode
+  // Toggle dark mode function
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
   };
 
-  // Dark Mode Setup (Unchanged) ---
+  // Dark Mode Setup
   useEffect(() => {
     const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
     setIsDarkMode(prefersDarkMode);
   }, []);
+  
   useEffect(() => {
     document.body.classList.toggle('dark', isDarkMode);
   }, [isDarkMode]);
@@ -585,17 +1052,14 @@ const TrainingPage = () => {
             // --- Drawing Logic ---
             drawUserPose(ctx, landmarks, canvas.width, canvas.height); // Draw skeleton
 
-            // *** Use the latestCorrectionsRef for drawing ***
+            // Use the latestCorrectionsRef for drawing
             const currentCorrections = latestCorrectionsRef.current;
-            // console.log("[onResults] Using corrections from ref:", currentCorrections); // Check ref value
             const jointsToCorrect = findJointsToCorrect(landmarks, currentCorrections);
-            // console.log("[onResults] Joints found to correct (using ref):", jointsToCorrect); // Check identified joints
 
             // Only attempt to draw if there are joints needing correction
             if (jointsToCorrect.length > 0) {
                  drawCorrectionArrows(ctx, landmarks, currentCorrections, jointsToCorrect, canvas.width, canvas.height);
             }
-            // *** END Use the latestCorrectionsRef for drawing ***
 
         } else {
             updateLandmarks(null);
@@ -603,17 +1067,23 @@ const TrainingPage = () => {
         ctx.restore();
     }
 
-
     const startMediaPipe = async () => {
         if (typeof window === 'undefined' || !webcamRef.current) {
-            console.log("[MediaPipe Setup] Aborted: window or webcamRef not ready."); return;
+            console.log("[MediaPipe Setup] Aborted: window or webcamRef not ready."); 
+            return;
         }
         console.log("[MediaPipe Setup] Initializing Pose...");
         const pose = new poseDetection.Pose({
             locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@${poseDetection.VERSION}/${file}`
         });
         poseInstanceRef.current = pose;
-        pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, enableSegmentation: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+        pose.setOptions({ 
+          modelComplexity: 1, 
+          smoothLandmarks: true, 
+          enableSegmentation: false, 
+          minDetectionConfidence: 0.5, 
+          minTrackingConfidence: 0.5 
+        });
         pose.onResults(onResults);
 
         initTimeoutId = setTimeout(async () => {
@@ -621,24 +1091,37 @@ const TrainingPage = () => {
                 console.log("[MediaPipe Setup] Attempting pose.initialize() after delay...");
                 await pose.initialize();
                 console.log("[MediaPipe Setup] Pose initialized successfully after delay.");
-                if (!webcamRef.current) { console.warn("[MediaPipe Setup] Webcam ref null before camera setup."); return; }
+                if (!webcamRef.current) { 
+                  console.warn("[MediaPipe Setup] Webcam ref null before camera setup."); 
+                  return; 
+                }
                 console.log("[MediaPipe Setup] Setting up Camera...");
                 const camera = new Camera(webcamRef.current, {
                     onFrame: async () => {
                         if (poseInstanceRef.current && webcamRef.current) {
-                            try { await poseInstanceRef.current.send({ image: webcamRef.current }); }
-                            catch (sendError) { console.error("[MediaPipe onFrame] Error sending frame:", sendError); }
+                            try { 
+                              await poseInstanceRef.current.send({ image: webcamRef.current }); 
+                            }
+                            catch (sendError) { 
+                              console.error("[MediaPipe onFrame] Error sending frame:", sendError); 
+                            }
                         }
                     },
-                    width: 640, height: 480
+                    width: 640, 
+                    height: 480
                 });
                 cameraInstanceRef.current = camera;
                 await camera.start();
                 console.log("[MediaPipe Setup] Camera started successfully.");
             } catch (initError) {
                 console.error("[MediaPipe Setup] Error initializing MediaPipe Pose (after delay):", initError);
-                if (poseInstanceRef.current) { poseInstanceRef.current.close(); poseInstanceRef.current = null; }
-                if (cameraInstanceRef.current) { cameraInstanceRef.current = null; }
+                if (poseInstanceRef.current) { 
+                  poseInstanceRef.current.close(); 
+                  poseInstanceRef.current = null; 
+                }
+                if (cameraInstanceRef.current) { 
+                  cameraInstanceRef.current = null; 
+                }
             }
         }, 100);
     };
@@ -648,102 +1131,137 @@ const TrainingPage = () => {
     return () => {
         console.log("[MediaPipe Cleanup] Cleaning up...");
         if (initTimeoutId) { clearTimeout(initTimeoutId); }
-        if (cameraInstanceRef.current) { cameraInstanceRef.current.stop(); cameraInstanceRef.current = null; }
-        if (poseInstanceRef.current) { poseInstanceRef.current.close(); poseInstanceRef.current = null; }
+        if (cameraInstanceRef.current) { 
+          cameraInstanceRef.current.stop(); 
+          cameraInstanceRef.current = null; 
+        }
+        if (poseInstanceRef.current) { 
+          poseInstanceRef.current.close(); 
+          poseInstanceRef.current = null; 
+        }
     };
   }, []); // Empty dependency array
 
-  // Add fullscreen styles to be applied conditionally
-  const fullscreenStyles = {
-    container: isFullscreen ? "fixed inset-0 z-50 bg-black m-0 p-0 max-w-none rounded-none" : "max-w-4xl mx-auto mt-2 bg-white dark:bg-gray-900 rounded-lg shadow-md overflow-hidden p-4",
-    videoContainer: isFullscreen ? "w-screen h-screen" : "relative w-full aspect-video",
-    infoPanel: isFullscreen ? "absolute bottom-4 left-0 right-0 bg-black/50 text-white px-4 py-2 rounded-none" : "mt-4 text-center text-sm text-gray-700 dark:text-gray-300"
-  };
-
-  // Add function to toggle muscle visualizer
+  // Function to toggle muscle visualizer
   const toggleMuscleVisualizer = () => {
     setShowMuscleVisualizer(!showMuscleVisualizer);
   };
 
   // --- Render ---
   return (
-    <section className={`overflow-hidden ${isFullscreen ? 'fixed inset-0 bg-black' : 'fixed inset-0'} ${isDarkMode && !isFullscreen ? 'bg-gradient-to-br from-gray-800 to-indigo-500' : !isFullscreen ? 'bg-gradient-to-br from-gray-100 to-indigo-500' : ''}`}>
-      <NavBar isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />
-      <main className={isFullscreen ? "h-full" : ""}>
-        <div className={fullscreenStyles.container}>
-          {!isFullscreen && <WorkoutSelector selectedWorkout={selectedWorkout} onSelectWorkout={handleWorkoutChange} isFullscreen={isFullscreen} />}
-          <div className={fullscreenStyles.videoContainer}>
-            <ConnectionStatus status={connectionStatus} />
-            <FullscreenButton isFullscreen={isFullscreen} toggleFullscreen={toggleFullscreen} />
-            {isFullscreen && <WorkoutSelector selectedWorkout={selectedWorkout} onSelectWorkout={handleWorkoutChange} isFullscreen={isFullscreen} />}
+    <motion.section 
+      className={`min-h-screen overflow-hidden ${
+        isDarkMode 
+          ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-indigo-900' 
+          : 'bg-gradient-to-br from-gray-100 via-gray-100 to-indigo-100'
+      }`}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5 }}
+    >
+      {!isFullscreen && <NavBar isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />}
+      
+      {/* Custom Notifications Container */}
+      <AnimatePresence>
+        {notifications.length > 0 && (
+          <motion.div 
+            className="fixed top-24 right-6 z-50 w-80 max-w-[90%]"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+          >
+            {notifications.map(notification => (
+              <CustomNotification
+                key={notification.id}
+                type={notification.type}
+                message={notification.message}
+                onClose={() => removeNotification(notification.id)}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
+      <motion.main 
+        className={`${isFullscreen ? 'h-screen' : 'container mx-auto px-4 py-4 sm:py-6 max-w-5xl'}`}
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.4, delay: 0.1 }}
+      >
+        <motion.div 
+          className={`${
+            isFullscreen 
+              ? 'fixed inset-0 bg-black m-0 p-0 max-w-none rounded-none' 
+              : 'mx-auto bg-black/20 dark:bg-gray-800/30 backdrop-blur-md rounded-2xl shadow-xl overflow-hidden border border-white/10'
+          }`}
+          layout
+          transition={{ duration: 0.4, type: 'spring', bounce: 0.2 }}
+        >
+          <div className={`relative ${
+            isFullscreen ? 'w-screen h-screen' : 'aspect-video'
+          }`}>
             <video
               ref={webcamRef}
-              className="absolute top-0 left-0 w-full h-full object-cover rounded-lg"
+              className="absolute top-0 left-0 w-full h-full object-cover"
               style={{ 
                 transform: 'scaleX(-1)',
                 borderRadius: isFullscreen ? '0' : undefined 
               }}
-              autoPlay muted playsInline
-              onLoadedData={() => console.log("[Video Event] Video metadata loaded.")}
-              onError={(e) => console.error("[Video Event] Video error:", e)}
+              autoPlay 
+              muted 
+              playsInline
             />
+            
             <canvas
               ref={canvasRef}
-              className="absolute top-0 left-0 w-full h-full rounded-lg"
+              className="absolute top-0 left-0 w-full h-full"
               style={{ 
                 transform: 'scaleX(-1)',
                 borderRadius: isFullscreen ? '0' : undefined 
               }}
             />
             
-            {/* Add Muscle Group Visualizer - use selectedWorkout instead of predictedWorkout */}
-            <MuscleGroupVisualizer isVisible={showMuscleVisualizer} isFullscreen={isFullscreen} muscleGroup={predictedMuscleGroup} />
+            {/* All UI controls positioned consistently */}
+            <ConnectionStatus status={connectionStatus} />
+            <FullscreenButton isFullscreen={isFullscreen} toggleFullscreen={toggleFullscreen} />
+            
+            {/* WorkoutSelector always in same position */}
+            <div className="absolute top-4 left-16 z-40">
+              <WorkoutSelector 
+                selectedWorkout={currentWorkout} 
+                onSelectWorkout={handleWorkoutChange} 
+              />
+            </div>
+            
+            <MuscleGroupVisualizer 
+              isVisible={showMuscleVisualizer} 
+              muscleGroup={predictedMuscleGroup} 
+            />
+            
             <MuscleVisualizerToggle 
               isVisible={showMuscleVisualizer} 
               toggleVisibility={toggleMuscleVisualizer} 
-              isFullscreen={isFullscreen}
             />
-          </div>
-          <div className={fullscreenStyles.infoPanel}>
-            <div className="flex flex-wrap justify-center items-center">
-              <div className="text-center">
-                <p>
-                  <span className="font-medium">Selected Workout:</span> {workoutMap[selectedWorkout]}
-                </p>
-                {predictedWorkout !== selectedWorkout && (
-                  <p className="text-sm">
-                    <span className="font-medium">AI Suggestion:</span> {workoutMap[predictedWorkout]}
-                    {recentWorkoutPredictions.length > 0 && (
-                      <span className="ml-2 text-xs opacity-75">
-                        (Confidence: {Math.round(predictionConfidence * 100)}%)
-                      </span>
-                    )}
-                  </p>
-                )}
-              </div>
+            
+            {/* InfoPanel moved inside video container with consistent positioning */}
+            <div className="absolute bottom-4 left-0 right-0 mx-auto max-w-xl px-4">
+              <InfoPanel 
+                currentWorkout={currentWorkout}
+                predictedWorkout={predictedWorkout}
+                predictionConfidence={predictionConfidence}
+                predictionThreshold={SUGGESTION_THRESHOLD}
+                predictedMuscleGroup={predictedMuscleGroup}
+                muscleGroupConfidence={muscleGroupConfidence}
+                feedbackLatency={feedbackLatency}
+                receivedCount={receivedCount}
+                connectionStatus={connectionStatus}
+              />
             </div>
-            
-            {predictedMuscleGroup > 0 && (
-              <p className={`${isFullscreen ? '' : 'mt-1'} text-center`}>
-                Muscle Group: <span className="font-semibold">{muscleGroupMap[predictedMuscleGroup]}</span>
-                {recentMuscleGroupPredictions.length > 0 && (
-                  <span className="ml-2 text-xs opacity-75">
-                    (Confidence: {Math.round(muscleGroupConfidence * 100)}%)
-                  </span>
-                )}
-              </p>
-            )}
-            
-            {(feedbackLatency > 0 || receivedCount > 0) && (
-              <p className={`${isFullscreen ? '' : 'mt-1'} text-xs text-center`}>
-                Latency: {feedbackLatency > 0 ? `${feedbackLatency}ms` : 'N/A'} | Corrections: {receivedCount}
-              </p>
-            )}
-            <p className={`${isFullscreen ? '' : 'mt-1'} text-xs text-center`}>Socket: {connectionStatus}</p>
           </div>
-        </div>
-      </main>
-    </section>
+        </motion.div>
+      </motion.main>
+    </motion.section>
   );
 };
 
