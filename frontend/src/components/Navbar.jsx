@@ -13,15 +13,24 @@ import {
   User,
   MessageSquare,
   FileText,
-  ArrowRight
+  ArrowRight,
+  ChevronDown
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const NavBar = ({ isDarkMode, toggleDarkMode }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const navigate = useNavigate();
   const user = useAuth();
+  
+  const handleLogout = () => {
+    user.logout();
+    navigate('/auth');
+    setIsProfileOpen(false);
+    setIsMenuOpen(false);
+  };
   
   // Loading state
   if (user.loading) {
@@ -108,19 +117,53 @@ const NavBar = ({ isDarkMode, toggleDarkMode }) => {
             </motion.button>
             
             {user.user ? (
-              <div className="hidden md:flex items-center space-x-4">
+              <div className="hidden md:flex items-center space-x-4 relative">
                 <motion.button 
-                  onClick={() => navigate("/dashboard")} 
+                  onClick={() => setIsProfileOpen(!isProfileOpen)} 
                   className={`bg-gradient-to-r ${
                     isDarkMode ? 'from-purple-500 to-indigo-600' : 'from-indigo-500 to-purple-600'
                   } text-white font-medium py-2 px-5 rounded-lg text-sm transition duration-300 flex items-center space-x-2`}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
-                  <span>Dashboard</span>
-                  <ArrowRight size={14} />
+                  <User size={16} className="mr-1" />
+                  <span>{user.user?.username || 'User'}</span>
+                  <ChevronDown size={14} />
                 </motion.button>
-                <motion.button 
+                
+                <AnimatePresence>
+                  {isProfileOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className={`absolute right-0 top-12 w-48 p-2 rounded-lg shadow-lg z-50 ${
+                        isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+                      }`}
+                    >
+                      <div 
+                        onClick={() => navigate("/settings")}
+                        className={`flex items-center space-x-2 px-4 py-2 rounded-md cursor-pointer ${
+                          isDarkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-700'
+                        }`}
+                      >
+                        <Settings size={16} />
+                        <span>Settings</span>
+                      </div>
+                      <div 
+                        onClick={handleLogout}
+                        className={`flex items-center space-x-2 px-4 py-2 rounded-md cursor-pointer ${
+                          isDarkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-700'
+                        }`}
+                      >
+                        <LogOut size={16} />
+                        <span>Logout</span>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                
+                {/* <motion.button 
                   onClick={() => navigate("/settings")}
                   className={`${
                     isDarkMode ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -129,7 +172,7 @@ const NavBar = ({ isDarkMode, toggleDarkMode }) => {
                   whileTap={{ scale: 0.95 }}
                 >
                   <Settings size={18} />
-                </motion.button>
+                </motion.button> */}
               </div>
             ) : (
               <motion.button 
@@ -196,18 +239,14 @@ const NavBar = ({ isDarkMode, toggleDarkMode }) => {
               
               {user.user ? (
                 <div className="space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                  <button 
-                    onClick={() => {
-                      navigate("/dashboard");
-                      setIsMenuOpen(false);
-                    }} 
-                    className={`w-full bg-gradient-to-r ${
-                      isDarkMode ? 'from-purple-500 to-indigo-600' : 'from-indigo-500 to-purple-600'
-                    } text-white font-medium py-2 px-4 rounded-lg text-sm transition duration-300 flex items-center justify-between`}
-                  >
-                    <span>Dashboard</span>
-                    <ArrowRight size={14} />
-                  </button>
+                  <div className={`w-full ${
+                    isDarkMode ? 'bg-gray-800' : 'bg-gray-100'
+                  } p-3 rounded-lg flex items-center space-x-2`}>
+                    <User size={16} className={isDarkMode ? 'text-purple-400' : 'text-indigo-600'} />
+                    <span className={isDarkMode ? 'text-white' : 'text-gray-700'}>
+                      {user.user?.username || 'User'}
+                    </span>
+                  </div>
                   <button 
                     onClick={() => {
                       navigate("/settings");
@@ -217,8 +256,17 @@ const NavBar = ({ isDarkMode, toggleDarkMode }) => {
                       isDarkMode ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     } font-medium py-2 px-4 rounded-lg text-sm transition duration-300 flex items-center justify-between`}
                   >
-                    <span>My Account</span>
+                    <span>Settings</span>
                     <Settings size={14} />
+                  </button>
+                  <button 
+                    onClick={handleLogout} 
+                    className={`w-full bg-gradient-to-r ${
+                      isDarkMode ? 'from-red-500 to-red-600' : 'from-red-500 to-red-600'
+                    } text-white font-medium py-2 px-4 rounded-lg text-sm transition duration-300 flex items-center justify-between`}
+                  >
+                    <span>Logout</span>
+                    <LogOut size={14} />
                   </button>
                 </div>
               ) : (
