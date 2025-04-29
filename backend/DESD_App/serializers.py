@@ -5,11 +5,24 @@ from django.contrib.auth import get_user_model
 from .models import *
 from django.contrib.auth.models import Group
 import re
+from django.core.validators import EmailValidator
+from django.core.exceptions import ValidationError
 
 User = get_user_model()
 
 # Company domain for employees
 COMPANY_DOMAIN = "ufcfur_15_3.com"
+
+# Simple email validator function that accepts underscores and numbers in domain
+def custom_email_validator(value):
+    """
+    Very simple email validator that allows underscores and numbers in domain names
+    """
+    # Pattern that specifically allows underscores in domain names
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._%-]+(\.[a-zA-Z0-9_%-]+)+$'
+    if not re.match(pattern, value):
+        raise ValidationError('Enter a valid email address.')
+    return value
 
 # Email validator function
 def validate_email_domain(email, group_name):
@@ -20,8 +33,6 @@ def validate_email_domain(email, group_name):
         if not email.endswith(f'@{COMPANY_DOMAIN}'):
             raise serializers.ValidationError(f"Admin and AI Engineer accounts must use company email (@{COMPANY_DOMAIN}).")
     return email
-
-
 
 # class UserCreateSerializer(BaseUserCreateSerializer):
 
@@ -48,6 +59,8 @@ class UserCreateSerializer(serializers.ModelSerializer):
     groups = serializers.SerializerMethodField()  # Include groups in the response
     is_admin = serializers.SerializerMethodField()  # Add is_admin field
     is_approved = serializers.BooleanField(required=False, default=False, write_only=True)
+    # Use our custom email validator
+    email = serializers.CharField(validators=[custom_email_validator])  # Changed to CharField with our validator
     
     class Meta:
         model = User

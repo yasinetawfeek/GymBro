@@ -14,14 +14,32 @@ import './App.css';
 export default function App() {
   return (
       <Routes>
+        {/* Public routes */}
         <Route path="/" element={<HomePage/>} />
-        <Route path="/settings" element={<ProtectedRoute><AccountManagement /></ProtectedRoute>} />
         <Route path="/auth" element={<AuthPage />} />
-        <Route path="/training" element={<TrainingPage />} />
-        <Route path="/workout" element={<WorkoutPage />} />
+        
+        {/* Protected routes for all authenticated users */}
+        <Route path="/settings" element={<ProtectedRoute><AccountManagement /></ProtectedRoute>} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        
+        {/* Customer and authorized user routes */}
+        <Route path="/training" element={<ProtectedRoute><TrainingPage /></ProtectedRoute>} />
+        <Route path="/workout" element={<ProtectedRoute><WorkoutPage /></ProtectedRoute>} />
+        
+        {/* Admin-only routes */}
+        <Route path="/admin" element={<ProtectedRoute requireAdmin={true}><AccountManagement /></ProtectedRoute>} />
+        <Route path="/admin/users" element={<ProtectedRoute requireAdmin={true}><AccountManagement /></ProtectedRoute>} />
+        <Route path="/admin/approvals" element={<ProtectedRoute requireAdmin={true}><AccountManagement /></ProtectedRoute>} />
+        
+        {/* AI Engineer routes */}
+        <Route path="/engineer" element={<ProtectedRoute requireEngineer={true}><AccountManagement /></ProtectedRoute>} />
+        <Route path="/engineer/models" element={<ProtectedRoute requireEngineer={true}><AccountManagement /></ProtectedRoute>} />
+        
+        {/* Video streaming route */}
         <Route path="/live" element={<ErrorBoundary><Meeting /></ErrorBoundary>} />
-        <Route path="*" element={<HomePage/>} />
+        
+        {/* Fallback route */}
+        <Route path="*" element={<Navigate to="/" />} />
       </Routes>
   );
 }

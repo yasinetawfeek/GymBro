@@ -4,7 +4,7 @@ import {
   UserCircle, Mail, MapPin, Calendar,
   Ruler, Weight, Heart, Medal, Target, 
   Clock, Dumbbell, ActivitySquare, TrendingUp,
-  Award, AlertCircle, X, RefreshCw
+  Award, AlertCircle, X, RefreshCw, BarChart3, ChevronLeft
 } from 'lucide-react';
 
 import NavBar from '../components/Navbar';
@@ -14,6 +14,7 @@ import FitnessStats from '../components/FitnessStats';
 import UserManagement from '../components/UserManagement';
 import UserDetailsPage from '../components/UserDetailsPage';
 import UserDetailModal from '../components/UserDetailModal';
+import ApprovalRequests from '../components/ApprovalRequests';
 
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -54,9 +55,10 @@ const AccountManagement = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [approvalStatus, setApprovalStatus] = useState(true);
   
   // Change this to match Navbar.jsx - don't destructure
-  const user = useAuth();
+  const auth = useAuth();
     
   // Check system preference on initial load
   useEffect(() => {
@@ -72,6 +74,36 @@ const AccountManagement = () => {
       document.body.classList.remove('dark');
     }
   }, [isDarkMode]);
+  
+  // Fetch role and approval status
+  useEffect(() => {
+    const fetchRoleInfo = async () => {
+      if (auth.token) {
+        try {
+          setLoading(true);
+          const response = await axios.get('http://localhost:8000/api/role_info/', {
+            headers: { Authorization: `Bearer ${auth.token}` }
+          });
+          
+          console.log("Role info:", response.data);
+          setApprovalStatus(response.data.is_approved);
+          
+          // If the user is not approved and is an AI Engineer, show a notification
+          if (!response.data.is_approved && response.data.is_ai_engineer) {
+            setError('Your account is awaiting admin approval. Some features are limited.');
+          }
+          
+        } catch (error) {
+          console.error("Error fetching role info:", error);
+          setError('Failed to fetch role information');
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+    
+    fetchRoleInfo();
+  }, [auth.token]);
   
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
@@ -94,44 +126,54 @@ const AccountManagement = () => {
     }
   });
   const [selectedUser, setSelectedUser] = useState(null);
+  const [userListRefreshTrigger, setUserListRefreshTrigger] = useState(0);
 
   // Determine user role from backend data
   const getUserRole = () => {
-    console.log("User object:", user);
-    console.log("User data:", user?.user);
+    console.log("User object:", auth);
+    console.log("User data:", auth?.user);
     
-    if (!user?.user) {
+    if (!auth?.user) {
       console.log("No user data found, defaulting to 'user' role");
-      return 'user';
+      return 'Customer';
     }
     
     // Check if the user has the is_admin field set to true
-    if (user.user.is_admin === true) {
+    if (auth.user.is_admin === true) {
       console.log("User is identified as admin via is_admin field");
-      return 'admin';
+      return 'Admin';
     }
     
     // Check if the user has admin permissions
-    if (user.user.basicInfo?.isAdmin || user.user.basicInfo?.rolename === 'Admin' || 
-        user.user.rolename === 'Admin' || user.user.basicInfo?.role === 'Admin') {
+    if (auth.user.basicInfo?.isAdmin || auth.user.basicInfo?.rolename === 'Admin' || 
+        auth.user.rolename === 'Admin' || auth.user.basicInfo?.role === 'Admin') {
       console.log("User is identified as admin");
-      return 'admin';
+      return 'Admin';
     }
     
     // Check groups directly if available
-    if (user.user.groups && Array.isArray(user.user.groups)) {
-      const hasAdminGroup = user.user.groups.some(g => {
+    if (auth.user.groups && Array.isArray(auth.user.groups)) {
+      const hasAdminGroup = auth.user.groups.some(g => {
         return (g && (g.name === 'Admin' || g === 'Admin'));
       });
       
       if (hasAdminGroup) {
         console.log("User is admin via groups array");
-        return 'admin';
+        return 'Admin';
+      }
+      
+      const hasAIEngineerGroup = auth.user.groups.some(g => {
+        return (g && (g.name === 'AI Engineer' || g === 'AI Engineer'));
+      });
+      
+      if (hasAIEngineerGroup) {
+        console.log("User is AI Engineer via groups array");
+        return 'AI Engineer';
       }
     }
     
-    console.log("User is not admin, defaulting to 'user' role");
-    return 'user';
+    console.log("User is not admin or AI Engineer, defaulting to 'Customer' role");
+    return 'Customer';
   };
   
   const userRole = getUserRole();
@@ -139,12 +181,19 @@ const AccountManagement = () => {
 
   // Set initial active page based on role
   useEffect(() => {
-    if (userRole === 'admin') {
+    if (userRole === 'Admin') {
       setActivePage('users');
+    } else if (userRole === 'AI Engineer') {
+      setActivePage('models');
     } else {
       setActivePage('profile');
     }
   }, [userRole]);
+
+  // Adding navigation to fitness stats for non-admin users
+  const navigateToStats = () => {
+    setActivePage('stats');
+  };
 
   const icons = {
     fullName: UserCircle,
@@ -208,10 +257,10 @@ const AccountManagement = () => {
       console.log('ProfileUpdate: API response:', response);
       
       // Update the user context with the new data
-      if (user && user.setUser) {
+      if (auth && auth.setUser) {
         console.log('ProfileUpdate: Updating user context');
-        user.setUser({
-          ...user.user,
+        auth.setUser({
+          ...auth.user,
           ...updatedData
         });
       } else {
@@ -264,10 +313,28 @@ const AccountManagement = () => {
   };
 
   // Handle user deletion
-  const handleDeleteUser = (userId) => {
+  const handleDeleteUser = async (userId) => {
     console.log("Deleting user:", userId);
-    setSelectedUser(null);
-    // You might want to refresh the user list after deletion
+    try {
+      setLoading(true);
+      // Call the userService to delete the user
+      await userService.deleteUser(userId);
+      console.log("User deleted successfully");
+      setSelectedUser(null);
+      
+      // If the active page is users, refresh the user list
+      if (activePage === 'users') {
+        // This will trigger the UserManagement component to refresh
+        console.log("Refreshing user list after deletion");
+        setUserListRefreshTrigger(prevTrigger => prevTrigger + 1);
+      }
+      
+    } catch (error) {
+      console.error("Failed to delete user:", error);
+      setError("Failed to delete user. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Handle user update
@@ -283,7 +350,7 @@ const AccountManagement = () => {
         console.log("Rendering ProfileOverview component");
         return (
           <ProfileOverview 
-            userData={user.user}
+            userData={auth.user}
             setUserData={handleProfileUpdate}
             isEditing={isEditing}
             setIsEditing={setIsEditing}
@@ -293,7 +360,27 @@ const AccountManagement = () => {
         );
       case 'stats':
         console.log("Rendering FitnessStats component");
-        return <FitnessStats fitnessStats={fitnessStats} isDarkMode={isDarkMode} />;
+        return (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className={`text-2xl font-light ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                Your <span className="text-purple-400 font-medium">Fitness Analytics</span>
+              </h2>
+              <button
+                onClick={() => setActivePage('profile')}
+                className={`p-2 rounded-lg ${
+                  isDarkMode 
+                    ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' 
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                } transition-colors flex items-center gap-2`}
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Back to Profile</span>
+              </button>
+            </div>
+            <FitnessStats fitnessStats={fitnessStats} isDarkMode={isDarkMode} />
+          </div>
+        );
       case 'users':
         console.log("Rendering UserManagement component");
         return (
@@ -302,8 +389,12 @@ const AccountManagement = () => {
             onSelectUser={handleSelectUser}
             onDeleteUser={handleDeleteUser}
             onSaveUser={handleSaveUser}
+            key={userListRefreshTrigger}
           />
         );
+      case 'approvals':
+        console.log("Rendering ApprovalRequests component");
+        return <ApprovalRequests isDarkMode={isDarkMode} />;
       case 'userDetails':
         console.log("Rendering UserDetailsPage component");
         return <UserDetailsPage isDarkMode={isDarkMode} />;
@@ -320,6 +411,22 @@ const AccountManagement = () => {
         : 'bg-gradient-to-br from-gray-50 via-white to-indigo-50 text-gray-900'
     }`}>
       <NavBar isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />
+      
+      {/* Approval Status Banner for AI Engineers */}
+      {userRole === 'AI Engineer' && !approvalStatus && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`fixed top-16 left-0 right-0 z-40 p-3 ${
+            isDarkMode 
+              ? 'bg-amber-800/90 text-amber-100 border-b border-amber-700'
+              : 'bg-amber-100 text-amber-800 border-b border-amber-200'
+          } flex items-center justify-center gap-2`}
+        >
+          <AlertCircle className="w-4 h-4" />
+          <span className="text-sm">Your account is awaiting admin approval. Some features are limited.</span>
+        </motion.div>
+      )}
       
       {/* Error Notification - Now fixed at the top, above all content */}
       <AnimatePresence>
@@ -364,6 +471,7 @@ const AccountManagement = () => {
             activePage={activePage}
             setActivePage={setActivePage}
             isDarkMode={isDarkMode}
+            isApproved={approvalStatus}
           />
 
           <div className="lg:ml-72 flex-1">
@@ -383,6 +491,23 @@ const AccountManagement = () => {
                 {renderActivePage()}
               </motion.div>
             </AnimatePresence>
+            
+            {/* Analytics shortcut button for regular users */}
+            {userRole === 'Customer' && activePage === 'profile' && (
+              <motion.button
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                onClick={navigateToStats}
+                className={`mt-4 px-4 py-2 rounded-lg shadow-md flex items-center ${
+                  isDarkMode 
+                    ? 'bg-purple-700 hover:bg-purple-600 text-white' 
+                    : 'bg-purple-600 hover:bg-purple-700 text-white'
+                } transition-colors`}
+              >
+                <BarChart3 className="w-4 h-4 mr-2" />
+                <span>View Fitness Analytics</span>
+              </motion.button>
+            )}
           </div>
         </div>
       </div>
@@ -395,7 +520,7 @@ const AccountManagement = () => {
             onClose={() => setSelectedUser(null)}
             onDelete={handleDeleteUser}
             onSave={handleSaveUser}
-            isAdmin={userRole === 'admin'}
+            isAdmin={userRole === 'Admin'}
             isDarkMode={isDarkMode}
           />
         )}

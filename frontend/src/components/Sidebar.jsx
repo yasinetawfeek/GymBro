@@ -3,25 +3,42 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   User, Users as UsersIcon, Terminal, 
   Brain, ActivitySquare, TrendingUp,
-  UserCircle
+  UserCircle, CheckCircle, Clock, AlertTriangle,
+  CreditCard, Settings, FileText, Database
 } from 'lucide-react';
 
-const Sidebar = ({ isMenuOpen, userRole, activePage, setActivePage, setIsMenuOpen, isDarkMode = true }) => {
+const Sidebar = ({ isMenuOpen, userRole, activePage, setActivePage, setIsMenuOpen, isDarkMode = true, isApproved = true }) => {
+  // Define role-specific pages
   const rolePages = {
-    user: [
+    Customer: [
       { id: 'profile', label: 'My Profile', icon: User },
-      { id: 'stats', label: 'Fitness Stats', icon: ActivitySquare }
+      { id: 'stats', label: 'Fitness Stats', icon: ActivitySquare },
+      { id: 'billing', label: 'Billing', icon: CreditCard },
+      { id: 'settings', label: 'Settings', icon: Settings }
     ],
-    admin: [
+    Admin: [
+      { id: 'profile', label: 'My Profile', icon: User },
       { id: 'users', label: 'User Management', icon: UsersIcon },
-      { id: 'userDetails', label: 'User Details', icon: UserCircle },
-      { id: 'stats', label: 'Analytics', icon: TrendingUp }
-    ],
-    engineer: [
+      { id: 'approvals', label: 'Approval Requests', icon: Clock },
+      { id: 'stats', label: 'Stats', icon: ActivitySquare },
+      { id: 'analytics', label: 'Analytics', icon: TrendingUp },
+      { id: 'billing', label: 'Billing Overview', icon: CreditCard },
       { id: 'models', label: 'ML Models', icon: Brain },
-      { id: 'api', label: 'API Access', icon: Terminal }
+      { id: 'settings', label: 'System Settings', icon: Settings }
+    ],
+    'AI Engineer': [
+      { id: 'profile', label: 'My Profile', icon: User },
+      { id: 'stats', label: 'Stats', icon: ActivitySquare },
+      { id: 'models', label: 'ML Models', icon: Brain },
+      { id: 'performance', label: 'Model Performance', icon: TrendingUp },
+      { id: 'data', label: 'Training Data', icon: Database },
+      { id: 'api', label: 'API Access', icon: Terminal },
+      { id: 'docs', label: 'Documentation', icon: FileText }
     ]
   };
+
+  // Get pages for current role, default to Customer if role not found
+  const currentRolePages = rolePages[userRole] || rolePages.Customer;
 
   return (
     <AnimatePresence>
@@ -37,8 +54,34 @@ const Sidebar = ({ isMenuOpen, userRole, activePage, setActivePage, setIsMenuOpe
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
       >
+        {/* Approval Status Indicator */}
+        {userRole === 'AI Engineer' && !isApproved && (
+          <div className={`mb-4 p-3 rounded-lg flex items-center space-x-2 ${
+            isDarkMode ? 'bg-amber-800/40 text-amber-200' : 'bg-amber-50 text-amber-800'
+          }`}>
+            <AlertTriangle size={16} className="flex-shrink-0" />
+            <span className="text-xs">Awaiting admin approval</span>
+          </div>
+        )}
+        
+        {userRole === 'AI Engineer' && isApproved && (
+          <div className={`mb-4 p-3 rounded-lg flex items-center space-x-2 ${
+            isDarkMode ? 'bg-green-800/40 text-green-200' : 'bg-green-50 text-green-800'
+          }`}>
+            <CheckCircle size={16} className="flex-shrink-0" />
+            <span className="text-xs">Account approved</span>
+          </div>
+        )}
+        
+        {/* Role Indicator */}
+        <div className={`mb-4 px-4 py-2 rounded-lg text-center ${
+          isDarkMode ? 'bg-gray-800/50 text-white' : 'bg-gray-100 text-gray-800'
+        }`}>
+          <span className="text-xs font-medium">{userRole} Dashboard</span>
+        </div>
+        
         <div className="space-y-2">
-          {rolePages[userRole].map((page) => (
+          {currentRolePages.map((page) => (
             <motion.div
               key={page.id}
               whileHover={{ scale: 1.01 }}

@@ -7,6 +7,7 @@ router = DefaultRouter()
 # router.register(r'users', UserViewSet.as_view(), basename='user')
 router.register(r'manage_accounts',AccountManagementViewSet, basename='manage_account')
 router.register(r'approvals', ApprovalViewSet, basename='approval')
+router.register(r'role_info', RoleInfoViewSet, basename='role_info')
 
 # urlpatterns = router.urls
 

@@ -6,8 +6,8 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import AllowAny
 from .serializers import *
-from rest_framework.permissions import IsAdminUser,IsAuthenticated
-from .permissions import IsOwner,IsMachineLearningExpert
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from .permissions import IsOwner, IsMachineLearningExpert, IsApprovedUser, IsAdminRole, IsAIEngineerRole, IsApprovedAIEngineer
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
@@ -134,23 +134,29 @@ class AccountManagementViewSet(viewsets.ModelViewSet):
     This is for admin to view and manage all users.
     Admins can view, update, delete, create users.
     """
-    permission_classes = [IsAuthenticated,IsAdminUser] #only the admin can access this view
+    permission_classes = [IsAuthenticated, IsAdminRole] # Only users with Admin role can access
     queryset = User.objects.all()
     serializer_class = UserCreateSerializer
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
 
-        target_rolename = instance.groups.first().name
+        # Get current user's role
+        current_user_group = request.user.groups.first()
+        current_rolename = current_user_group.name if current_user_group else None
         
-        current_rolename = request.user.groups.first().name
-        if target_rolename == current_rolename:
+        # Get target user's role
+        target_user_group = instance.groups.first()
+        target_rolename = target_user_group.name if target_user_group else None
+        
+        # Only check role conflict if both users have roles
+        if current_rolename and target_rolename and current_rolename == target_rolename:
             raise PermissionDenied("User cannot delete other users with the same role")
             
         return super().destroy(request, *args, **kwargs)
 
 class UserActiveCountViewSet(viewsets.ViewSet):
-    permission_classes = [IsAuthenticated,IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminRole]  # Only admins can access
     def list(self, request):
         total_number_of_users = User.objects.count()
         total_number_of_active_users = User.objects.filter(is_active=True).count()
@@ -181,18 +187,17 @@ API_KEY = "job_hunting_ai_memory_leakage"
 
 class TrainWorkoutClassiferViewSet(viewsets.ViewSet):
     """
-    ViewSet only accessable by Admin and AI Engineer
+    ViewSet only accessible by Admin and approved AI Engineers
     """
-    
-    permission_classes = [IsAuthenticated,IsMachineLearningExpert] 
+    permission_classes = [IsAuthenticated, IsApprovedUser, IsMachineLearningExpert] 
 
     def post(self, request):
         user = request.user
         permissions = user.get_all_permissions()
-        print("all permissions",permissions)
+        print("all permissions", permissions)
         
-        headers ={
-            "X-API-KEY":API_KEY, 
+        headers = {
+            "X-API-KEY": API_KEY, 
             "Content-Type": "application/json",
         }
         machine_learning_accuracy = requests.post(FLASK_MACHINE_LEARNING_API_URL, json=request.data, headers=headers)
@@ -203,11 +208,10 @@ class PredictWorkoutClassiferViewSet(viewsets.ViewSet):
     """
     ViewSet is accessed by anyone who has registered and has been authenticated
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsApprovedUser]  # Must be an approved user
     def post(self, request):
-
-        headers ={
-            "X-API-KEY":API_KEY, 
+        headers = {
+            "X-API-KEY": API_KEY, 
             "Content-Type": "application/json",
         }
         machine_learning_prediction = requests.post(FLASK_MACHINE_LEARNING_API_PREDICT_URL, json=request.data, headers=headers)
@@ -249,7 +253,7 @@ class ApprovalViewSet(viewsets.ViewSet):
     """
     API endpoints for admin to approve/reject users.
     """
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminRole]  # Only admins can approve/reject
     
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
@@ -283,6 +287,28 @@ class ApprovalViewSet(viewsets.ViewSet):
         pending_users = User.objects.filter(profile__is_approved=False)
         serializer = UserCreateSerializer(pending_users, many=True)
         return Response(serializer.data)
+
+# New endpoint for role information
+class RoleInfoViewSet(viewsets.ViewSet):
+    """
+    API endpoint to get role information for the current user
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def list(self, request):
+        user = request.user
+        role = user.groups.first().name if user.groups.exists() else "No Role"
+        is_approved = user.profile.is_approved if hasattr(user, 'profile') else False
+        
+        return Response({
+            "username": user.username,
+            "email": user.email,
+            "role": role,
+            "is_approved": is_approved,
+            "is_admin": role == "Admin",
+            "is_ai_engineer": role == "AI Engineer",
+            "is_customer": role == "Customer"
+        })
 
 
 

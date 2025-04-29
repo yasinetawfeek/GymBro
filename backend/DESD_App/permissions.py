@@ -1,4 +1,5 @@
 from rest_framework import permissions
+from django.contrib.auth.models import Group
 
 class IsOwner(permissions.BasePermission):
     """
@@ -9,10 +10,10 @@ class IsOwner(permissions.BasePermission):
 
 class IsMachineLearningExpert(permissions.BasePermission):
     """
-    permission check for machine learning experts
+    Permission check for machine learning experts
     """
     def has_permission(self, request, view):
-        # check if user has permission to access a Machine Learning features
+        # check if user has permission to access Machine Learning features
         return request.user.has_perm('auth.machine_learning_permission')
     
 class IsApprovedUser(permissions.BasePermission):
@@ -22,5 +23,39 @@ class IsApprovedUser(permissions.BasePermission):
     def has_permission(self, request, view):
         # Check if user is authenticated and approved
         return request.user.is_authenticated and hasattr(request.user, 'profile') and request.user.profile.is_approved
+
+class IsAdminRole(permissions.BasePermission):
+    """
+    Permission check for users with Admin role
+    """
+    def has_permission(self, request, view):
+        # Check if user has Admin role
+        if not request.user.is_authenticated:
+            return False
+        return request.user.groups.filter(name='Admin').exists()
+
+class IsAIEngineerRole(permissions.BasePermission):
+    """
+    Permission check for users with AI Engineer role
+    """
+    def has_permission(self, request, view):
+        # Check if user has AI Engineer role
+        if not request.user.is_authenticated:
+            return False
+        return request.user.groups.filter(name='AI Engineer').exists()
+
+class IsApprovedAIEngineer(permissions.BasePermission):
+    """
+    Permission check for approved AI Engineers
+    """
+    def has_permission(self, request, view):
+        # Check if user is an approved AI Engineer
+        if not request.user.is_authenticated:
+            return False
+        
+        is_ai_engineer = request.user.groups.filter(name='AI Engineer').exists()
+        is_approved = hasattr(request.user, 'profile') and request.user.profile.is_approved
+        
+        return is_ai_engineer and is_approved
 
     
