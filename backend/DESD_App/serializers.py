@@ -4,8 +4,22 @@ from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
 from django.contrib.auth import get_user_model
 from .models import *
 from django.contrib.auth.models import Group
+import re
 
 User = get_user_model()
+
+# Company domain for employees
+COMPANY_DOMAIN = "ufcfur_15_3.com"
+
+# Email validator function
+def validate_email_domain(email, group_name):
+    """
+    Validates that AI Engineers and Admins use company email domain
+    """
+    if group_name in ['Admin', 'AI Engineer']:
+        if not email.endswith(f'@{COMPANY_DOMAIN}'):
+            raise serializers.ValidationError(f"Admin and AI Engineer accounts must use company email (@{COMPANY_DOMAIN}).")
+    return email
 
 
 
@@ -33,10 +47,11 @@ class UserCreateSerializer(serializers.ModelSerializer):
     group = serializers.CharField(write_only=True, required=False)  # this field is for assigning group to user [Write]
     groups = serializers.SerializerMethodField()  # Include groups in the response
     is_admin = serializers.SerializerMethodField()  # Add is_admin field
+    is_approved = serializers.BooleanField(required=False, default=False, write_only=True)
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'password', 'email', 'rolename', 'group', 'groups', 'is_admin']  # Include groups and is_admin
+        fields = ['id', 'username', 'password', 'email', 'rolename', 'group', 'groups', 'is_admin', 'is_approved']
         extra_kwargs = {'password': {'write_only': True}}
 
     def get_rolename(self, obj):
@@ -51,20 +66,45 @@ class UserCreateSerializer(serializers.ModelSerializer):
         # Check if user is in the Admin group
         return obj.groups.filter(name='Admin').exists()
     
+    def validate(self, data):
+        # Get the group name if provided
+        group_name = data.get('group')
+        email = data.get('email')
+        
+        if email and group_name:
+            # Validate email domain for company employees
+            validate_email_domain(email, group_name)
+        
+        return data
+    
     def create(self, validated_data):
         group_name = validated_data.pop('group', None)
+        is_approved = validated_data.pop('is_approved', False)
         user = User.objects.create_user(**validated_data)
         request = self.context.get('request')
 
-        if group_name and (request and  not request.user.is_staff):
+        # Set default approval status based on role
+        # Customers are auto-approved, company roles need admin approval
+        if group_name:
             try:
                 group = Group.objects.get(name=group_name)
                 user.groups.add(group)
+                
+                # Set is_approved flag - Customers are automatically approved
+                if group_name in ['Admin', 'AI Engineer']:
+                    user.profile.is_approved = is_approved
+                else:
+                    user.profile.is_approved = True
+                user.profile.save()
+                
             except Group.DoesNotExist:
                 raise serializers.ValidationError(f"Group '{group_name}' does not exist.")
         else:
+            # Default to Customer role
             group = Group.objects.get(name='Customer')
             user.groups.add(group)
+            user.profile.is_approved = True
+            user.profile.save()
 
         return user
     

@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import AllowAny
 from .serializers import *
 from rest_framework.permissions import IsAdminUser,IsAuthenticated
@@ -212,6 +212,77 @@ class PredictWorkoutClassiferViewSet(viewsets.ViewSet):
         }
         machine_learning_prediction = requests.post(FLASK_MACHINE_LEARNING_API_PREDICT_URL, json=request.data, headers=headers)
         return Response(machine_learning_prediction.json(), status=machine_learning_prediction.status_code)
+
+# Add this new view for registration
+class RegisterView(generics.CreateAPIView):
+    """
+    API view for user registration with role selection.
+    """
+    serializer_class = UserCreateSerializer
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        # Create a copy of the data to manipulate
+        data = request.data.copy()
+        
+        # Default role is Customer if none is provided
+        if 'group' not in data:
+            data['group'] = 'Customer'
+        
+        # Set default approval status based on role
+        if data['group'] in ['Admin', 'AI Engineer']:
+            data['is_approved'] = False
+        else:
+            data['is_approved'] = True
+            
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        
+        return Response(
+            {"detail": "User registered successfully. Please log in."},
+            status=status.HTTP_201_CREATED
+        )
+
+# Add an approval endpoint for admins
+class ApprovalViewSet(viewsets.ViewSet):
+    """
+    API endpoints for admin to approve/reject users.
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        try:
+            user = User.objects.get(pk=pk)
+            user.profile.is_approved = True
+            user.profile.save()
+            return Response({"detail": f"User {user.username} has been approved."})
+        except User.DoesNotExist:
+            return Response(
+                {"detail": "User not found."}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        try:
+            user = User.objects.get(pk=pk)
+            user.profile.is_approved = False
+            user.profile.save()
+            return Response({"detail": f"User {user.username} has been rejected."})
+        except User.DoesNotExist:
+            return Response(
+                {"detail": "User not found."}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    @action(detail=False, methods=['get'])
+    def pending(self, request):
+        # Get users who are not approved
+        pending_users = User.objects.filter(profile__is_approved=False)
+        serializer = UserCreateSerializer(pending_users, many=True)
+        return Response(serializer.data)
 
 
 

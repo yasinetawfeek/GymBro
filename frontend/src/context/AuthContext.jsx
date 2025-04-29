@@ -107,21 +107,45 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Function to register a new user. Adjust field names to match your backend.
-  const register = async (email, username, password) => {
+  // Function to register a new user with role selection
+  const register = async (email, username, password, role = 'Customer') => {
     try {
       setLoading(true);
-      const response = await axios.post(`${API_URL}auth/users/`, {
+      console.log("AuthContext: Attempting registration with role:", role);
+      
+      // Use our custom register endpoint that handles role assignment
+      const response = await axios.post(`${API_URL}api/register/`, {
         email,
         username,
         password,
-        re_password: password
+        group: role // Send the selected role
       });
+      
+      console.log("AuthContext: Registration successful:", response.data);
       setLoading(false);
       return response.data;
     } catch (err) {
+      console.error("AuthContext: Registration failed", err);
+      console.error("Error details:", err.response?.data);
       setLoading(false);
       throw err;
+    }
+  };
+
+  // Check if a user is approved
+  const checkApprovalStatus = async () => {
+    if (!token) return false;
+    
+    try {
+      const response = await axios.get(`${API_URL}api/my_account/`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Check if user profile exists and is_approved is true
+      return response.data?.profile?.is_approved || false;
+    } catch (err) {
+      console.error("Error checking approval status:", err);
+      return false;
     }
   };
 
@@ -143,6 +167,7 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     register,
+    checkApprovalStatus,
     setUser
   };
 

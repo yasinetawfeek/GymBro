@@ -11,12 +11,21 @@ import {
   Moon,
   AlertCircle,
   ArrowLeft,
-  CheckCircle
+  CheckCircle,
+  UserCheck
 } from 'lucide-react';
 
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from "react-router-dom";
+import RoleSelection from '../components/RoleSelection';
+
+// Add email validation function
+const validateEmail = (email) => {
+  // Regex pattern that allows underscores in domain
+  const pattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-_]+\.[a-zA-Z]{2,}$/;
+  return pattern.test(email);
+};
 
 // Animation variants
 const fadeIn = {
@@ -34,6 +43,7 @@ const AuthPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
+  const [role, setRole] = useState('Customer');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [generalError, setGeneralError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -75,19 +85,62 @@ const AuthPage = () => {
     setErrors({});
     setIsLoading(true);
   
+    // Validate email format
+    if (!isLogin && !validateEmail(email)) {
+      setErrors({
+        email: ['Please enter a valid email address']
+      });
+      setIsLoading(false);
+      return;
+    }
+  
     try {
       if (isLogin) {
         await user.login(username, password);
         navigate('/');
       } else {
-        await user.register(email, username, password);
+        // Check if email domain is valid for company roles
+        if ((role === 'AI Engineer' || role === 'Admin') && !email.endsWith('@ufcfur_15_3.com')) {
+          setErrors({
+            email: ['Company roles require an email with domain @ufcfur_15_3.com']
+          });
+          setIsLoading(false);
+          return;
+        }
+        
+        console.log("Attempting registration with:", { username, email, role });
+        
+        // Call register with the selected role
+        await user.register(email, username, password, role);
         setIsLogin(true);
-        setSuccessMessage('Account created successfully! Please log in.');
+        
+        // Show different messages based on role
+        if (role === 'Customer') {
+          setSuccessMessage('Account created successfully! Please log in.');
+        } else {
+          setSuccessMessage('Account created! Please wait for admin approval before logging in.');
+        }
       }
     } catch (error) {
+      console.error("Registration error:", error);
       if (error.response) {
-        setErrors(error.response.data || {});
-        setGeneralError('An error occurred. Please try again.');
+        console.error("Response data:", error.response.data);
+        
+        // Handle different types of errors
+        if (typeof error.response.data === 'object') {
+          if (error.response.data.detail) {
+            setGeneralError(error.response.data.detail);
+          } else if (error.response.data.non_field_errors) {
+            setGeneralError(Array.isArray(error.response.data.non_field_errors) ? 
+              error.response.data.non_field_errors[0] : error.response.data.non_field_errors);
+          } else {
+            // Set field-specific errors
+            setErrors(error.response.data || {});
+            setGeneralError('Please correct the errors below.');
+          }
+        } else {
+          setGeneralError('An unexpected error occurred. Please try again.');
+        }
       } else {
         setGeneralError('Network error. Please check your connection.');
       }
@@ -98,6 +151,15 @@ const AuthPage = () => {
 
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
+  };
+
+  // Handle role change
+  const handleRoleChange = (newRole) => {
+    setRole(newRole);
+    // If user had previously entered an email with the wrong domain, clear the error
+    if (errors.email) {
+      setErrors({...errors, email: null});
+    }
   };
 
   return (
@@ -248,7 +310,6 @@ const AuthPage = () => {
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.3 }}
                 >
                   <label className={`block mb-2 flex items-center text-sm font-medium ${
                     isDarkMode ? 'text-gray-300' : 'text-gray-700'
@@ -258,19 +319,24 @@ const AuthPage = () => {
                     }`} />
                     Email
                   </label>
-                  <div className={`relative group`}>
+                  <div className="relative group">
                     <input 
-                      type="email"
+                      type="text"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className={`w-full px-4 py-3 rounded-lg focus:outline-none transition-all duration-300 ${
                         isDarkMode 
                           ? 'bg-gray-700/70 text-white border border-gray-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500' 
                           : 'bg-white text-gray-900 border border-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500'
-                      }`}
+                      } ${errors.email ? 'border-red-500' : ''}`}
                       placeholder="Enter your email"
-                      required={!isLogin}
+                      required
                     />
+                    {errors.email && (
+                      <p className={`mt-2 text-sm ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+                        {Array.isArray(errors.email) ? errors.email[0] : errors.email}
+                      </p>
+                    )}
                   </div>
                 </motion.div>
               )}
@@ -279,7 +345,7 @@ const AuthPage = () => {
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: isLogin ? 0.2 : 0.3 }}
+              transition={{ delay: 0.2 }}
             >
               <label className={`block mb-2 flex items-center text-sm font-medium ${
                 isDarkMode ? 'text-gray-300' : 'text-gray-700'
@@ -289,7 +355,7 @@ const AuthPage = () => {
                 }`} />
                 Password
               </label>
-              <div className={`relative group`}>
+              <div className="relative group">
                 <input 
                   type="password"
                   value={password}
@@ -305,49 +371,64 @@ const AuthPage = () => {
               </div>
             </motion.div>
 
+            {/* Role selection for registration */}
+            <AnimatePresence>
+              {!isLogin && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <RoleSelection 
+                    selectedRole={role}
+                    onRoleChange={handleRoleChange}
+                    isDarkMode={isDarkMode}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <motion.button
               type="submit"
               disabled={isLoading}
-              whileHover={{ scale: 1.02, y: -2 }}
+              className={`w-full py-3 px-4 rounded-lg ${
+                isDarkMode 
+                  ? 'bg-purple-600 hover:bg-purple-700 text-white' 
+                  : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+              } transition-colors duration-300 flex items-center justify-center font-medium`}
+              whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className={`w-full mt-8 py-3 px-4 rounded-lg flex items-center justify-center 
-                font-medium text-white shadow-lg transition-all duration-300 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}
-                ${isDarkMode 
-                  ? 'bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 shadow-purple-900/20' 
-                  : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-indigo-900/20'
-                }`}
             >
               {isLoading ? (
-                <div className="animate-spin rounded-full h-5 w-5 border-2 border-t-transparent border-white"></div>
+                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              ) : isLogin ? (
+                <>
+                  <LogIn className="w-5 h-5 mr-2" />
+                  Login
+                </>
               ) : (
                 <>
-                  {isLogin ? (
-                    <LogIn className="w-5 h-5 mr-2" />
-                  ) : (
-                    <User className="w-5 h-5 mr-2" />
-                  )}
-                  {isLogin ? 'Log in' : 'Create Account'}
+                  <UserCheck className="w-5 h-5 mr-2" />
+                  Sign Up
                 </>
               )}
             </motion.button>
           </form>
 
-          <div className="mt-8 text-center">
-            <motion.button 
+          <div className="mt-6 text-center">
+            <button
               onClick={() => setIsLogin(!isLogin)}
-              className={`inline-flex items-center text-sm ${
+              className={`text-sm font-medium ${
                 isDarkMode 
                   ? 'text-purple-400 hover:text-purple-300' 
-                  : 'text-indigo-600 hover:text-indigo-500'
-                } transition-colors duration-300`}
-              disabled={isLoading}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+                  : 'text-indigo-600 hover:text-indigo-800'
+              } transition-colors duration-300`}
             >
-              {isLogin 
-                ? 'Need an account? Sign Up' 
-                : 'Already have an account? Log In'}
-            </motion.button>
+              {isLogin ? 'Need an account? Sign up' : 'Already have an account? Login'}
+            </button>
           </div>
         </div>
       </motion.div>
