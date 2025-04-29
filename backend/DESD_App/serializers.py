@@ -157,6 +157,26 @@ class UserCreateSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
     
 
+# Serializer for BillingRecord model
+class BillingRecordSerializer(serializers.ModelSerializer):
+    username = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = BillingRecord
+        fields = [
+            'id', 'username', 'email', 'amount', 'subscription_type', 
+            'billing_date', 'due_date', 'status', 'description', 
+            'api_calls', 'data_usage', 'created_at'
+        ]
+    
+    def get_username(self, obj):
+        return obj.user.username
+    
+    def get_email(self, obj):
+        return obj.user.email
+    
+
 
 
     

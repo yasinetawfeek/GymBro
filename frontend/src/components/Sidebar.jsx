@@ -4,7 +4,8 @@ import {
   User, Users as UsersIcon, Terminal, 
   Brain, ActivitySquare, TrendingUp,
   UserCircle, CheckCircle, Clock, AlertTriangle,
-  CreditCard, Settings, FileText, Database
+  CreditCard, Settings, FileText, Database,
+  DollarSign, PieChart
 } from 'lucide-react';
 
 const Sidebar = ({ isMenuOpen, userRole, activePage, setActivePage, setIsMenuOpen, isDarkMode = true, isApproved = true }) => {
@@ -20,9 +21,9 @@ const Sidebar = ({ isMenuOpen, userRole, activePage, setActivePage, setIsMenuOpe
       { id: 'profile', label: 'My Profile', icon: User },
       { id: 'users', label: 'User Management', icon: UsersIcon },
       { id: 'approvals', label: 'Approval Requests', icon: Clock },
+      { id: 'billing', label: 'Billing Overview', icon: DollarSign },
       { id: 'stats', label: 'Stats', icon: ActivitySquare },
-      { id: 'analytics', label: 'Analytics', icon: TrendingUp },
-      { id: 'billing', label: 'Billing Overview', icon: CreditCard },
+      { id: 'analytics', label: 'Analytics', icon: PieChart },
       { id: 'models', label: 'ML Models', icon: Brain },
       { id: 'settings', label: 'System Settings', icon: Settings }
     ],

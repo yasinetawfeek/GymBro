@@ -15,6 +15,7 @@ import UserManagement from '../components/UserManagement';
 import UserDetailsPage from '../components/UserDetailsPage';
 import UserDetailModal from '../components/UserDetailModal';
 import ApprovalRequests from '../components/ApprovalRequests';
+import BillingOverview from '../components/BillingOverview';
 
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -343,6 +344,40 @@ const AccountManagement = () => {
     // You might want to refresh the user list after update
   };
 
+  // Handle toggle approval for AI Engineers
+  const handleToggleApproval = async (userId, isApproved) => {
+    try {
+      setLoading(true);
+      
+      const endpoint = isApproved ? 'approve' : 'reject';
+      const action = isApproved ? 'approved' : 'rejected';
+      
+      const token = localStorage.getItem('access_token');
+      await axios.post(`http://localhost:8000/api/approvals/${userId}/${endpoint}/`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      console.log(`User ${action} successfully`);
+      
+      // Update the selected user if it's the one we just modified
+      if (selectedUser && selectedUser.id === userId) {
+        setSelectedUser({
+          ...selectedUser,
+          isApproved: isApproved
+        });
+      }
+      
+      // Refresh user list to reflect changes
+      setUserListRefreshTrigger(prev => prev + 1);
+      
+    } catch (error) {
+      console.error(`Error ${isApproved ? 'approving' : 'rejecting'} user:`, error);
+      setError(`Failed to ${isApproved ? 'approve' : 'reject'} user. Please try again.`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const renderActivePage = () => {
     console.log("Rendering active page:", activePage);
     switch (activePage) {
@@ -389,12 +424,16 @@ const AccountManagement = () => {
             onSelectUser={handleSelectUser}
             onDeleteUser={handleDeleteUser}
             onSaveUser={handleSaveUser}
+            onToggleApproval={handleToggleApproval}
             key={userListRefreshTrigger}
           />
         );
       case 'approvals':
         console.log("Rendering ApprovalRequests component");
         return <ApprovalRequests isDarkMode={isDarkMode} />;
+      case 'billing':
+        console.log("Rendering BillingOverview component");
+        return <BillingOverview isDarkMode={isDarkMode} />;
       case 'userDetails':
         console.log("Rendering UserDetailsPage component");
         return <UserDetailsPage isDarkMode={isDarkMode} />;
@@ -520,6 +559,7 @@ const AccountManagement = () => {
             onClose={() => setSelectedUser(null)}
             onDelete={handleDeleteUser}
             onSave={handleSaveUser}
+            onToggleApproval={handleToggleApproval}
             isAdmin={userRole === 'Admin'}
             isDarkMode={isDarkMode}
           />

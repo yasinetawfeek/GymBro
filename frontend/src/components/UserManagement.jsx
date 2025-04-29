@@ -32,7 +32,7 @@ const tableRowVariant = {
   }
 };
 
-const UserManagement = ({ isDarkMode = true, onSelectUser, onDeleteUser, onSaveUser }) => {
+const UserManagement = ({ isDarkMode = true, onSelectUser, onDeleteUser, onSaveUser, onToggleApproval }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isFiltering, setIsFiltering] = useState(false);
   const [filterRole, setFilterRole] = useState('All');
@@ -57,18 +57,42 @@ const UserManagement = ({ isDarkMode = true, onSelectUser, onDeleteUser, onSaveU
       console.log("API response:", response);
       
       if (response) {
-        // Transform backend users to frontend format if needed
-        const formattedUsers = response.map(user => ({
-          id: user.id,
-          username: user.username,
-          fullName: user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : user.username,
-          email: user.email || 'No email',
-          rolename: user.groups && user.groups.length > 0 ? user.groups[0].name : 'Customer',
-          memberSince: new Date(user.date_joined).toLocaleDateString(),
-          lastActive: 'Recently',
-          status: user.is_active ? 'Active' : 'Inactive',
-          location: user.location || 'Not specified',
-          phoneNumber: user.phone_number || 'Not specified'
+        // Process each user to ensure we have the correct approval status
+        const formattedUsers = await Promise.all(response.map(async user => {
+          let isApproved = false;
+          
+          // For AI Engineers, we need to check their specific approval status
+          if (user.groups && user.groups.length > 0 && user.groups[0].name === 'AI Engineer') {
+            try {
+              // Get specific user role info to check approval status
+              const token = localStorage.getItem('access_token');
+              const roleResponse = await axios.get(`http://localhost:8000/api/role_info/${user.id}/user_approval_status/`, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              isApproved = roleResponse.data.is_approved;
+            } catch (error) {
+              console.error(`Error fetching approval status for user ${user.id}:`, error);
+              // Default to backend value if available, otherwise false
+              isApproved = user.profile?.is_approved || false;
+            }
+          } else {
+            // Non-AI Engineers are considered approved by default
+            isApproved = true;
+          }
+          
+          return {
+            id: user.id,
+            username: user.username,
+            fullName: user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : user.username,
+            email: user.email || 'No email',
+            rolename: user.groups && user.groups.length > 0 ? user.groups[0].name : 'Customer',
+            memberSince: new Date(user.date_joined).toLocaleDateString(),
+            lastActive: 'Recently',
+            status: user.is_active ? 'Active' : 'Inactive',
+            location: user.location || 'Not specified',
+            phoneNumber: user.phone_number || 'Not specified',
+            isApproved: isApproved
+          };
         }));
         
         setUsers(formattedUsers);
@@ -111,6 +135,41 @@ const UserManagement = ({ isDarkMode = true, onSelectUser, onDeleteUser, onSaveU
     } catch (error) {
       console.error("Error updating user:", error);
       setError("Failed to update user. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleToggleApproval = async (userId, isApproved) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // Determine which endpoint to call based on the target approval status
+      const endpoint = isApproved ? 'approve' : 'reject';
+      const action = isApproved ? 'approved' : 'rejected';
+      
+      const token = localStorage.getItem('access_token');
+      await axios.post(`http://localhost:8000/api/approvals/${userId}/${endpoint}/`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Update local state
+      setUsers(users.map(user => 
+        user.id === userId ? { ...user, isApproved } : user
+      ));
+      
+      console.log(`User ${action} successfully`);
+      
+      // If onSaveUser is provided, call it with updated user
+      const updatedUser = users.find(user => user.id === userId);
+      if (updatedUser && onSaveUser) {
+        onSaveUser({...updatedUser, isApproved});
+      }
+      
+    } catch (error) {
+      console.error(`Error ${isApproved ? 'approving' : 'rejecting'} user:`, error);
+      setError(`Failed to ${isApproved ? 'approve' : 'reject'} user. Please try again.`);
     } finally {
       setIsLoading(false);
     }
@@ -398,7 +457,11 @@ const UserManagement = ({ isDarkMode = true, onSelectUser, onDeleteUser, onSaveU
                     backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)'
                   }}
                   className="grid grid-cols-12 gap-4 px-6 py-4 items-center cursor-pointer"
-                  onClick={() => onSelectUser && onSelectUser(user)}
+                  onClick={(e) => {
+                    // Only navigate to user details if we didn't click on a control button
+                    if (e.target.closest('.control-button')) return;
+                    onSelectUser && onSelectUser(user);
+                  }}
                 >
                   <div className="col-span-4 sm:col-span-3 flex items-center space-x-3">
                     <div className={`${
@@ -432,7 +495,7 @@ const UserManagement = ({ isDarkMode = true, onSelectUser, onDeleteUser, onSaveU
                         ? isDarkMode 
                           ? 'bg-purple-500/20 text-purple-400' 
                           : 'bg-purple-100 text-purple-700'
-                        : user.rolename === 'Premium' 
+                        : user.rolename === 'AI Engineer' 
                           ? isDarkMode 
                             ? 'bg-blue-500/20 text-blue-400' 
                             : 'bg-blue-100 text-blue-700'
@@ -441,6 +504,20 @@ const UserManagement = ({ isDarkMode = true, onSelectUser, onDeleteUser, onSaveU
                             : 'bg-gray-100 text-gray-700'
                     }`}>
                       {user.rolename}
+                      {user.rolename === 'AI Engineer' && (
+                        <span 
+                          className={`ml-1.5 inline-block w-2 h-2 rounded-full ${
+                            user.isApproved
+                              ? isDarkMode
+                                ? 'bg-green-400'
+                                : 'bg-green-500'
+                              : isDarkMode
+                                ? 'bg-amber-400'
+                                : 'bg-amber-500'
+                          }`}
+                          title={user.isApproved ? 'Access Granted' : 'Access Restricted'}
+                        />
+                      )}
                     </span>
                   </div>
                   
@@ -460,6 +537,27 @@ const UserManagement = ({ isDarkMode = true, onSelectUser, onDeleteUser, onSaveU
                       }
                       {user.status}
                     </span>
+                    
+                    {/* Quick access toggle approval button for AI Engineers */}
+                    {user.rolename === 'AI Engineer' && (
+                      <button 
+                        className={`ml-2 control-button px-1.5 py-0.5 rounded text-xs ${
+                          user.isApproved
+                            ? isDarkMode
+                              ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400'
+                              : 'bg-amber-50 hover:bg-amber-100 text-amber-600'
+                            : isDarkMode
+                              ? 'bg-green-500/20 hover:bg-green-500/30 text-green-400'
+                              : 'bg-green-50 hover:bg-green-100 text-green-600'
+                        }`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleApproval(user.id, !user.isApproved);
+                        }}
+                      >
+                        {user.isApproved ? 'Revoke' : 'Grant'}
+                      </button>
+                    )}
                   </div>
                   
                   <div className="col-span-1 flex justify-end">
