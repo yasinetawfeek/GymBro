@@ -824,6 +824,7 @@ const BillingOverview = ({ isDarkMode }) => {
               // Refresh billing data after successful payment
               fetchBillingData();
             }}
+            isAdminView={false}
           />
         )}
       </AnimatePresence>

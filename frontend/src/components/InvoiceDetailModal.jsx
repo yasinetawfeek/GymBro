@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import LoadingSpinner from './LoadingSpinner';
 
-const InvoiceDetailModal = ({ invoiceId, isDarkMode, onClose, onPaymentSuccess }) => {
+const InvoiceDetailModal = ({ invoiceId, isDarkMode, onClose, onPaymentSuccess, isAdminView = false }) => {
   const [invoice, setInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -261,7 +261,7 @@ const InvoiceDetailModal = ({ invoiceId, isDarkMode, onClose, onPaymentSuccess }
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black bg-opacity-50"
       onClick={onClose}
     >
       {/* Modal content - stop propagation to prevent closing when clicking inside the modal */}
@@ -458,8 +458,8 @@ const InvoiceDetailModal = ({ invoiceId, isDarkMode, onClose, onPaymentSuccess }
               </div>
             </div>
             
-            {/* Payment Section - Only shown for pending invoices */}
-            {invoice.status === 'pending' && (
+            {/* Payment Section - Only shown for pending invoices and non-admin users */}
+            {invoice.status === 'pending' && !isAdminView && (
               <div className={`p-6 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
                 <h3 className={`text-sm font-medium mb-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                   PAYMENT
@@ -520,42 +520,53 @@ const InvoiceDetailModal = ({ invoiceId, isDarkMode, onClose, onPaymentSuccess }
             )}
             
             {/* Actions Footer */}
-            <div className={`p-6 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-              <div className="flex flex-wrap gap-2">
+            <div className={`p-4 flex flex-wrap gap-3 border-t ${
+              isDarkMode ? 'border-white/10' : 'border-gray-200'
+            }`}>
+              <div className="flex-grow flex flex-wrap gap-3">
                 <button
-                  onClick={handlePrintInvoice}
-                  className={`flex items-center px-3 py-2 rounded-lg ${
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handlePrintInvoice();
+                  }}
+                  className={`px-3 py-2 rounded-lg flex items-center text-sm ${
                     isDarkMode
-                      ? 'bg-gray-700 hover:bg-gray-600 text-white'
-                      : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
+                      ? 'bg-gray-800 hover:bg-gray-700 text-white'
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
                   }`}
                 >
                   <Printer className="w-4 h-4 mr-2" />
-                  Print Invoice
+                  Print
                 </button>
                 
                 <button
-                  onClick={handleShareInvoice}
-                  className={`flex items-center px-3 py-2 rounded-lg ${
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDownloadInvoice();
+                  }}
+                  className={`px-3 py-2 rounded-lg flex items-center text-sm ${
                     isDarkMode
-                      ? 'bg-gray-700 hover:bg-gray-600 text-white'
-                      : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
+                      ? 'bg-gray-800 hover:bg-gray-700 text-white'
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                  }`}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Download
+                </button>
+                
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleShareInvoice();
+                  }}
+                  className={`px-3 py-2 rounded-lg flex items-center text-sm ${
+                    isDarkMode
+                      ? 'bg-gray-800 hover:bg-gray-700 text-white'
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
                   }`}
                 >
                   <Share2 className="w-4 h-4 mr-2" />
                   Share
-                </button>
-                
-                <button
-                  onClick={onClose}
-                  className={`flex items-center px-3 py-2 ml-auto rounded-lg ${
-                    isDarkMode
-                      ? 'bg-gray-700 hover:bg-gray-600 text-white'
-                      : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
-                  }`}
-                >
-                  <X className="w-4 h-4 mr-2" />
-                  Close
                 </button>
               </div>
             </div>

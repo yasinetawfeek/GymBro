@@ -6,6 +6,7 @@ import {
   Filter, Download, FileText, Search, X, 
   User, ChevronLeft, ChevronRight
 } from 'lucide-react';
+import InvoiceDetailModal from './InvoiceDetailModal';
 
 // Animation variants
 const fadeIn = {
@@ -42,6 +43,10 @@ const AdminBillingActivity = ({ isDarkMode }) => {
       total_pages: 1
     }
   });
+  
+  // Invoice modal state
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState(null);
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   
   // Filter state
   const [startDate, setStartDate] = useState(
@@ -183,6 +188,24 @@ const AdminBillingActivity = ({ isDarkMode }) => {
     }
   };
 
+  // Handle opening the invoice modal
+  const handleOpenInvoiceModal = (invoiceId) => {
+    setSelectedInvoiceId(invoiceId);
+    setIsInvoiceModalOpen(true);
+  };
+  
+  // Handle closing the invoice modal
+  const handleCloseInvoiceModal = () => {
+    setIsInvoiceModalOpen(false);
+    setSelectedInvoiceId(null);
+  };
+  
+  // Handle invoice payment success
+  const handleInvoicePaymentSuccess = () => {
+    // Refresh the billing data to reflect the changes
+    fetchBillingActivity();
+  };
+
   const renderActivityTab = () => {
     let dataToDisplay = [];
     
@@ -307,11 +330,14 @@ const AdminBillingActivity = ({ isDarkMode }) => {
             </div>
             
             <div className="col-span-1 flex justify-end">
-              <button className={`p-1 rounded-lg ${
-                isDarkMode 
-                  ? 'hover:bg-gray-700 text-gray-400 hover:text-white' 
-                  : 'hover:bg-gray-100 text-gray-500 hover:text-gray-800'
-              }`}>
+              <button 
+                onClick={() => handleOpenInvoiceModal(record.id)}
+                className={`p-1 rounded-lg ${
+                  isDarkMode 
+                    ? 'hover:bg-gray-700 text-gray-400 hover:text-white' 
+                    : 'hover:bg-gray-100 text-gray-500 hover:text-gray-800'
+                }`}
+              >
                 <FileText className="w-4 h-4" />
               </button>
             </div>
@@ -764,6 +790,19 @@ const AdminBillingActivity = ({ isDarkMode }) => {
           )}
         </>
       )}
+      
+      {/* Invoice Detail Modal */}
+      <AnimatePresence>
+        {isInvoiceModalOpen && selectedInvoiceId && (
+          <InvoiceDetailModal
+            invoiceId={selectedInvoiceId}
+            isDarkMode={isDarkMode}
+            onClose={handleCloseInvoiceModal}
+            onPaymentSuccess={handleInvoicePaymentSuccess}
+            isAdminView={true}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };
