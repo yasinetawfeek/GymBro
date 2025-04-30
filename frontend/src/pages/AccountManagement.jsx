@@ -16,6 +16,7 @@ import UserDetailsPage from '../components/UserDetailsPage';
 import UserDetailModal from '../components/UserDetailModal';
 import ApprovalRequests from '../components/ApprovalRequests';
 import BillingOverview from '../components/BillingOverview';
+import AdminBillingActivity from '../components/AdminBillingActivity';
 
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -434,6 +435,9 @@ const AccountManagement = () => {
       case 'billing':
         console.log("Rendering BillingOverview component");
         return <BillingOverview isDarkMode={isDarkMode} />;
+      case 'billingActivity':
+        console.log("Rendering AdminBillingActivity component");
+        return <AdminBillingActivity isDarkMode={isDarkMode} />;
       case 'userDetails':
         console.log("Rendering UserDetailsPage component");
         return <UserDetailsPage isDarkMode={isDarkMode} />;
