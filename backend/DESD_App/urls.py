@@ -9,6 +9,8 @@ router.register(r'manage_accounts',AccountManagementViewSet, basename='manage_ac
 router.register(r'approvals', ApprovalViewSet, basename='approval')
 router.register(r'role_info', RoleInfoViewSet, basename='role_info')
 router.register(r'billing', BillingViewSet, basename='billing')
+router.register(r'invoices', InvoiceViewSet, basename='invoice')  # Register InvoiceViewSet
+router.register(r'subscriptions', SubscriptionViewSet, basename='subscription')  # Register SubscriptionViewSet
 
 # urlpatterns = router.urls
 

@@ -5,7 +5,7 @@ import {
   Brain, ActivitySquare, TrendingUp,
   UserCircle, CheckCircle, Clock, AlertTriangle,
   CreditCard, Settings, FileText, Database,
-  DollarSign, PieChart
+  DollarSign, PieChart, BarChart
 } from 'lucide-react';
 
 const Sidebar = ({ isMenuOpen, userRole, activePage, setActivePage, setIsMenuOpen, isDarkMode = true, isApproved = true }) => {
@@ -22,6 +22,7 @@ const Sidebar = ({ isMenuOpen, userRole, activePage, setActivePage, setIsMenuOpe
       { id: 'users', label: 'User Management', icon: UsersIcon },
       { id: 'approvals', label: 'Approval Requests', icon: Clock },
       { id: 'billing', label: 'Billing Overview', icon: DollarSign },
+      { id: 'billingActivity', label: 'Billing Activity', icon: BarChart },
       { id: 'stats', label: 'Stats', icon: ActivitySquare },
       { id: 'analytics', label: 'Analytics', icon: PieChart },
       { id: 'models', label: 'ML Models', icon: Brain },

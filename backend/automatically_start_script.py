@@ -28,8 +28,8 @@ Create Groups
 """
 
 
-query = User.objects.all()
-query.delete()
+# query = User.objects.all()
+# query.delete()
 
 content_type = ContentType.objects.get(app_label='auth', model='user')
 
