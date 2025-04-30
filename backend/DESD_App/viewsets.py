@@ -157,23 +157,6 @@ class AccountManagementViewSet(viewsets.ModelViewSet):
             
         return super().destroy(request, *args, **kwargs)
 
-class UserActiveCountViewSet(viewsets.ViewSet):
-    permission_classes = [IsAuthenticated, IsAdminRole]  # Only admins can access
-    def list(self, request):
-        total_number_of_users = User.objects.count()
-        total_number_of_active_users = User.objects.filter(is_active=True).count()
-        total_number_of_inactive_users = User.objects.filter(is_active=False).count()
-        data = {
-            "total_number_of_users": total_number_of_users,
-            "total_number_of_active_users": total_number_of_active_users,
-            "total_number_of_inactive_users": total_number_of_inactive_users,
-        }
-
-        return Response(data)
-    
-
-
-
 """
 Machine Learning ViewSets below for both training and predicting
 AI as service will run through python flask as API, this API will only be accessible through django
@@ -213,32 +196,6 @@ class TrainWorkoutClassiferViewSet(viewsets.ViewSet):
         # Calculate response time
         response_time = (time.time() - start_time) * 1000  # Convert to milliseconds
         
-        # Track usage for billing purposes
-        UsageTracking.objects.create(
-            user=request.user,
-            endpoint='train_model',
-            response_time=response_time,
-            status_code=machine_learning_accuracy.status_code,
-            request_data=request.data,
-            response_data=machine_learning_accuracy.json() if machine_learning_accuracy.status_code == 200 else None,
-            ip_address=request.META.get('REMOTE_ADDR')
-        )
-        
-        # Update user quota
-        try:
-            quota, created = UsageQuota.objects.get_or_create(
-                user=request.user,
-                defaults={'reset_date': (datetime.now() + timedelta(days=30)).date()}
-            )
-            quota.api_calls_used += 1
-            
-            # Assuming each training request uses 1000MB (1GB) of data
-            data_usage = 1000.0
-            quota.data_usage = float(quota.data_usage) + data_usage
-            quota.save()
-        except Exception as e:
-            print(f"Error updating quota: {str(e)}")
-        
         return Response(machine_learning_accuracy.json(), status=machine_learning_accuracy.status_code)
     
 
@@ -261,104 +218,6 @@ class PredictWorkoutClassiferViewSet(viewsets.ViewSet):
         
         # Calculate response time
         response_time = (time.time() - start_time) * 1000  # Convert to milliseconds
-        
-        # Track usage for billing purposes
-        UsageTracking.objects.create(
-            user=request.user,
-            endpoint='predict_model',
-            response_time=response_time,
-            status_code=machine_learning_prediction.status_code,
-            request_data=request.data,
-            response_data=machine_learning_prediction.json() if machine_learning_prediction.status_code == 200 else None,
-            ip_address=request.META.get('REMOTE_ADDR')
-        )
-        
-        # Update user quota
-        try:
-            quota, created = UsageQuota.objects.get_or_create(
-                user=request.user,
-                defaults={'reset_date': (datetime.now() + timedelta(days=30)).date()}
-            )
-            quota.api_calls_used += 1
-            
-            # Assuming each prediction request uses 10MB of data
-            data_usage = 10.0
-            quota.data_usage = float(quota.data_usage) + data_usage
-            quota.save()
-            
-            # Create invoice record for the usage if it's a customer
-            if request.user.groups.filter(name='Customer').exists():
-                # Check if user has an active subscription
-                subscription = Subscription.objects.filter(
-                    user=request.user, 
-                    is_active=True, 
-                    start_date__lte=datetime.now().date(),
-                    end_date__gte=datetime.now().date()
-                ).first()
-                
-                # If no subscription exists, create a free subscription
-                if not subscription:
-                    subscription = Subscription.objects.create(
-                        user=request.user,
-                        plan='free',
-                        start_date=datetime.now().date(),
-                        end_date=(datetime.now() + timedelta(days=30)).date(),
-                        price=0.00,
-                        max_api_calls=100,
-                        max_data_usage=1000
-                    )
-                
-                # Check if user has exceeded their quota
-                if quota.api_calls_used > subscription.max_api_calls or float(quota.data_usage) > subscription.max_data_usage:
-                    # Calculate overage charges
-                    api_overage = max(0, quota.api_calls_used - subscription.max_api_calls)
-                    data_overage = max(0, float(quota.data_usage) - subscription.max_data_usage)
-                    
-                    # Rate per overage based on subscription plan
-                    if subscription.plan == 'free':
-                        api_rate = 0.01  # $0.01 per call
-                        data_rate = 0.005  # $0.005 per MB
-                    elif subscription.plan == 'basic':
-                        api_rate = 0.005
-                        data_rate = 0.002
-                    elif subscription.plan == 'premium':
-                        api_rate = 0.002
-                        data_rate = 0.001
-                    else:  # enterprise
-                        api_rate = 0.001
-                        data_rate = 0.0005
-                    
-                    # Calculate charges
-                    api_charge = api_overage * api_rate
-                    data_charge = data_overage * data_rate
-                    total_charge = api_charge + data_charge
-                    
-                    # Only create invoice if there's a charge
-                    if total_charge > 0:
-                        Invoice.objects.create(
-                            subscription=subscription,
-                            user=request.user,
-                            amount=total_charge,
-                            due_date=(datetime.now() + timedelta(days=15)).date(),
-                            status='pending',
-                            description=f"Overage charges: {api_overage} API calls, {data_overage} MB data"
-                        )
-                
-                # Create a billing record for this usage
-                BillingRecord.objects.create(
-                    user=request.user,
-                    amount=0.00,  # Will be updated later if needed
-                    subscription_type=subscription.plan,
-                    billing_date=datetime.now().date(),
-                    due_date=(datetime.now() + timedelta(days=15)).date(),
-                    status='pending',
-                    description='ML prediction service usage',
-                    api_calls=1,
-                    data_usage=10.0  # 10MB per prediction
-                )
-            
-        except Exception as e:
-            print(f"Error updating quota or creating invoice: {str(e)}")
         
         return Response(machine_learning_prediction.json(), status=machine_learning_prediction.status_code)
 
@@ -615,13 +474,6 @@ class BillingViewSet(viewsets.ModelViewSet):
         if bill_status:
             invoices = invoices.filter(status=bill_status)
             
-        # Get usage tracking in the date range with username filter if provided
-        usage_records = UsageTracking.objects.filter(
-            timestamp__date__gte=start_date,
-            timestamp__date__lte=end_date,
-            **user_filter
-        )
-        
         # Implement basic pagination
         page_size = int(request.query_params.get('page_size', 50))
         page = int(request.query_params.get('page', 1))
@@ -632,12 +484,10 @@ class BillingViewSet(viewsets.ModelViewSet):
         
         billing_records_paginated = billing_records[start_idx:end_idx]
         invoices_paginated = invoices[start_idx:end_idx]
-        usage_records_paginated = usage_records[start_idx:end_idx]
         
         # Serialize each dataset
         billing_serializer = BillingRecordSerializer(billing_records_paginated, many=True)
         invoice_serializer = InvoiceSerializer(invoices_paginated, many=True)
-        usage_serializer = UsageTrackingSerializer(usage_records_paginated, many=True)
         
         # Calculate summary metrics
         total_billed_amount = sum(record.amount for record in billing_records)
@@ -648,7 +498,6 @@ class BillingViewSet(viewsets.ModelViewSet):
         # Get unique users with billing activity
         active_users = set(record.user.id for record in billing_records)
         active_users.update(invoice.user.id for invoice in invoices)
-        active_users.update(record.user.id for record in usage_records)
         
         # Get activity by subscription type
         subscription_activity = {}
@@ -672,7 +521,7 @@ class BillingViewSet(viewsets.ModelViewSet):
                 'total_api_calls': total_api_calls,
                 'total_data_usage': total_data_usage,
                 'active_users_count': len(active_users),
-                'total_records_count': billing_records.count() + invoices.count() + usage_records.count()
+                'total_records_count': billing_records.count() + invoices.count()
             },
             'pagination': {
                 'page': page,
@@ -681,245 +530,13 @@ class BillingViewSet(viewsets.ModelViewSet):
                     1, 
                     math.ceil(max(
                         billing_records.count(), 
-                        invoices.count(), 
-                        usage_records.count()
+                        invoices.count()
                     ) / page_size)
                 )
             },
             'subscription_activity': subscription_activity,
             'billing_records': billing_serializer.data,
-            'invoices': invoice_serializer.data,
-            'usage_records': usage_serializer.data
-        })
-
-# Model Version ViewSet
-class ModelVersionViewSet(viewsets.ModelViewSet):
-    """
-    API for managing ML model versions.
-    Only accessible by approved AI Engineers and Admin.
-    """
-    permission_classes = [IsAuthenticated, IsApprovedUser, IsMachineLearningExpert]
-    serializer_class = ModelVersionSerializer
-    queryset = ModelVersion.objects.all()
-    
-    @action(detail=True, methods=['post'])
-    def activate(self, request, pk=None):
-        """Activate a specific model version and deactivate all others of the same name"""
-        try:
-            model_version = self.get_object()
-            
-            # Deactivate all other versions of this model
-            ModelVersion.objects.filter(name=model_version.name).update(is_active=False)
-            
-            # Activate this version
-            model_version.is_active = True
-            model_version.save()
-            
-            return Response({
-                "status": "success",
-                "message": f"Model {model_version.name} v{model_version.version} is now active"
-            })
-        except Exception as e:
-            return Response({
-                "status": "error",
-                "message": str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=False, methods=['get'])
-    def active(self, request):
-        """Get all currently active model versions"""
-        active_models = ModelVersion.objects.filter(is_active=True)
-        serializer = self.get_serializer(active_models, many=True)
-        return Response(serializer.data)
-
-# Model Performance ViewSet
-class ModelPerformanceViewSet(viewsets.ModelViewSet):
-    """
-    API for tracking and querying ML model performance metrics.
-    Only accessible by approved AI Engineers and Admin.
-    """
-    permission_classes = [IsAuthenticated, IsApprovedUser, IsMachineLearningExpert]
-    serializer_class = ModelPerformanceSerializer
-    queryset = ModelPerformance.objects.all()
-    
-    @action(detail=False, methods=['get'])
-    def latest(self, request):
-        """Get the latest performance metrics for each model version"""
-        # Group by model_version and get the latest for each
-        latest_performances = {}
-        
-        for perf in ModelPerformance.objects.all().order_by('-recorded_at'):
-            model_id = perf.model_version_id
-            if model_id not in latest_performances:
-                latest_performances[model_id] = perf
-                
-        serializer = self.get_serializer(latest_performances.values(), many=True)
-        return Response(serializer.data)
-    
-    @action(detail=False, methods=['get'])
-    def by_model(self, request):
-        """Get performance metrics for a specific model by name"""
-        model_name = request.query_params.get('name')
-        if not model_name:
-            return Response({"error": "Model name parameter is required"}, 
-                          status=status.HTTP_400_BAD_REQUEST)
-            
-        # Get all versions for this model name, then get performance metrics
-        model_versions = ModelVersion.objects.filter(name=model_name)
-        performances = ModelPerformance.objects.filter(
-            model_version__in=model_versions
-        ).order_by('-recorded_at')
-        
-        serializer = self.get_serializer(performances, many=True)
-        return Response(serializer.data)
-
-# Model Update ViewSet
-class ModelUpdateViewSet(viewsets.ModelViewSet):
-    """
-    API for managing model updates.
-    Only accessible by approved AI Engineers and Admin.
-    """
-    permission_classes = [IsAuthenticated, IsApprovedUser, IsMachineLearningExpert]
-    serializer_class = ModelUpdateSerializer
-    queryset = ModelUpdate.objects.all()
-    
-    def perform_create(self, serializer):
-        # Set the current user as the updater
-        serializer.save(updated_by=self.request.user)
-        
-    @action(detail=True, methods=['post'])
-    def complete(self, request, pk=None):
-        """Mark a model update as completed"""
-        update = self.get_object()
-        update.status = 'completed'
-        update.completed_at = timezone.now()
-        update.save()
-        
-        return Response({
-            "status": "success",
-            "message": "Model update marked as completed",
-            "completed_at": update.completed_at
-        })
-    
-    @action(detail=True, methods=['post'])
-    def fail(self, request, pk=None):
-        """Mark a model update as failed"""
-        update = self.get_object()
-        update.status = 'failed'
-        update.completed_at = timezone.now()
-        update.save()
-        
-        return Response({
-            "status": "error",
-            "message": "Model update marked as failed",
-            "completed_at": update.completed_at
-        })
-
-# Usage Tracking ViewSet
-class UsageTrackingViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    API for viewing ML service usage data.
-    Only accessible by Admin.
-    """
-    permission_classes = [IsAuthenticated, IsAdminRole]
-    serializer_class = UsageTrackingSerializer
-    queryset = UsageTracking.objects.all()
-    
-    def get_queryset(self):
-        queryset = UsageTracking.objects.all()
-        
-        # Filter by user if provided
-        user_id = self.request.query_params.get('user_id')
-        if user_id:
-            queryset = queryset.filter(user_id=user_id)
-            
-        # Filter by endpoint if provided
-        endpoint = self.request.query_params.get('endpoint')
-        if endpoint:
-            queryset = queryset.filter(endpoint=endpoint)
-            
-        # Filter by date range if provided
-        start_date = self.request.query_params.get('start_date')
-        end_date = self.request.query_params.get('end_date')
-        if start_date and end_date:
-            queryset = queryset.filter(
-                timestamp__date__gte=start_date,
-                timestamp__date__lte=end_date
-            )
-            
-        return queryset
-    
-    @action(detail=False, methods=['get'])
-    def summary(self, request):
-        """Get a summary of usage statistics"""
-        queryset = self.get_queryset()
-        
-        # Total API calls
-        total_calls = queryset.count()
-        
-        # Calls by endpoint
-        endpoint_counts = {}
-        for record in queryset:
-            endpoint = record.endpoint
-            endpoint_counts[endpoint] = endpoint_counts.get(endpoint, 0) + 1
-            
-        # Calls by user (top 10 users)
-        user_counts = {}
-        for record in queryset:
-            user_id = record.user_id
-            username = record.user.username
-            if username not in user_counts:
-                user_counts[username] = 0
-            user_counts[username] += 1
-            
-        top_users = sorted(user_counts.items(), key=lambda x: x[1], reverse=True)[:10]
-        
-        # Average response time
-        avg_response_time = queryset.exclude(response_time__isnull=True).values_list('response_time', flat=True)
-        avg_response_time = sum(avg_response_time) / len(avg_response_time) if avg_response_time else 0
-        
-        return Response({
-            'total_calls': total_calls,
-            'endpoint_counts': endpoint_counts,
-            'top_users': dict(top_users),
-            'avg_response_time': avg_response_time
-        })
-    
-    @action(detail=False, methods=['get'])
-    def my_usage(self, request):
-        """Get the current user's usage data"""
-        queryset = UsageTracking.objects.filter(user=request.user)
-        serializer = self.get_serializer(queryset, many=True)
-        
-        # Get the user's quota information
-        quota, created = UsageQuota.objects.get_or_create(
-            user=request.user,
-            defaults={'reset_date': (datetime.now() + timedelta(days=30)).date()}
-        )
-        
-        # Get user's active subscription
-        subscription = Subscription.objects.filter(
-            user=request.user,
-            is_active=True
-        ).first()
-        
-        # If subscription exists, calculate remaining quota
-        quota_data = {}
-        if subscription:
-            quota_data = {
-                'api_calls_used': quota.api_calls_used,
-                'api_calls_limit': subscription.max_api_calls,
-                'api_calls_remaining': max(0, subscription.max_api_calls - quota.api_calls_used),
-                'data_usage': float(quota.data_usage),
-                'data_usage_limit': subscription.max_data_usage,
-                'data_remaining': max(0, subscription.max_data_usage - float(quota.data_usage)),
-                'reset_date': quota.reset_date
-            }
-        
-        return Response({
-            'usage_records': serializer.data,
-            'quota': quota_data,
-            'total_calls': queryset.count()
+            'invoices': invoice_serializer.data
         })
 
 # Subscription ViewSet
@@ -974,6 +591,15 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             # Deactivate the current subscription
             active_sub.is_active = False
             active_sub.save()
+            
+            # Cancel any pending invoices for the user
+            pending_invoices = Invoice.objects.filter(
+                user=request.user,
+                status='pending'
+            )
+            for invoice in pending_invoices:
+                invoice.status = 'cancelled'
+                invoice.save()
         
         # Get subscription details
         plan = request.data.get('plan', 'free')
@@ -1018,16 +644,6 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             status='pending',
             description=f"{plan.capitalize()} plan subscription"
         )
-        
-        # Reset the user's quota
-        quota, created = UsageQuota.objects.get_or_create(
-            user=request.user,
-            defaults={'reset_date': (datetime.now() + timedelta(days=30)).date()}
-        )
-        quota.api_calls_used = 0
-        quota.data_usage = 0
-        quota.reset_date = (datetime.now() + timedelta(days=30)).date()
-        quota.save()
         
         serializer = self.get_serializer(subscription)
         return Response({
@@ -1103,63 +719,6 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 'overdue_total': overdue_total,
                 'total_invoices': invoices.count()
             }
-        })
-
-# Usage Quota ViewSet
-class UsageQuotaViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    API for viewing usage quotas.
-    Admin can view all quotas, users can view their own.
-    """
-    serializer_class = UsageQuotaSerializer
-    
-    def get_permissions(self):
-        if self.action == 'list':
-            permission_classes = [IsAuthenticated, IsAdminRole]
-        else:
-            permission_classes = [IsAuthenticated]
-        return [permission() for permission in permission_classes]
-    
-    def get_queryset(self):
-        user = self.request.user
-        
-        # Admin can see all quotas
-        if user.groups.filter(name='Admin').exists():
-            return UsageQuota.objects.all()
-        
-        # Other users can only see their own quota
-        return UsageQuota.objects.filter(user=user)
-    
-    @action(detail=False, methods=['get'])
-    def my_quota(self, request):
-        """Get the current user's usage quota"""
-        quota, created = UsageQuota.objects.get_or_create(
-            user=request.user,
-            defaults={'reset_date': (datetime.now() + timedelta(days=30)).date()}
-        )
-        
-        serializer = self.get_serializer(quota)
-        return Response(serializer.data)
-    
-    @action(detail=True, methods=['post'])
-    def reset(self, request, pk=None):
-        """Reset a user's quota (admin only)"""
-        if not request.user.groups.filter(name='Admin').exists():
-            return Response(
-                {"detail": "Only admins can reset quotas."}, 
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
-        quota = self.get_object()
-        quota.api_calls_used = 0
-        quota.data_usage = 0
-        quota.reset_date = (datetime.now() + timedelta(days=30)).date()
-        quota.save()
-        
-        serializer = self.get_serializer(quota)
-        return Response({
-            'message': f"Quota reset for {quota.user.username}",
-            'quota': serializer.data
         })
 
 

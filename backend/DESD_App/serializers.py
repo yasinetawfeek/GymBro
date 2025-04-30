@@ -157,101 +157,6 @@ class BillingRecordSerializer(serializers.ModelSerializer):
     def get_email(self, obj):
         return obj.user.email
 
-# Serializer for AI Engineer requests
-class AIEngineerRequestSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(source='user.username', read_only=True)
-    email = serializers.EmailField(source='user.email', read_only=True)
-    approved_by_name = serializers.CharField(source='approved_by.username', read_only=True, allow_null=True)
-    
-    class Meta:
-        model = AIEngineerRequest
-        fields = [
-            'id', 'user', 'username', 'email', 'request_date', 'status', 
-            'experience', 'qualifications', 'approved_by', 'approved_by_name', 
-            'reviewed_date'
-        ]
-        read_only_fields = ['request_date', 'reviewed_date']
-    
-    def update(self, instance, validated_data):
-        # If status is being changed to "APPROVED" or "REJECTED", set reviewed_date
-        if 'status' in validated_data and validated_data['status'] in ['APPROVED', 'REJECTED']:
-            if instance.status != validated_data['status']:  # Only update if status actually changed
-                validated_data['reviewed_date'] = timezone.now()
-                
-                # If approving, set the user's profile to approved
-                if validated_data['status'] == 'APPROVED':
-                    instance.user.profile.is_approved = True
-                    instance.user.profile.save()
-                    
-        return super().update(instance, validated_data)
-
-# Serializer for Model Version
-class ModelVersionSerializer(serializers.ModelSerializer):
-    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
-    
-    class Meta:
-        model = ModelVersion
-        fields = [
-            'id', 'name', 'version', 'description', 'file_path', 
-            'created_by', 'created_by_username', 'created_at', 'is_active', 
-            'model_type', 'hyperparameters'
-        ]
-        read_only_fields = ['created_at']
-
-# Serializer for Model Performance
-class ModelPerformanceSerializer(serializers.ModelSerializer):
-    model_name = serializers.CharField(source='model_version.name', read_only=True)
-    model_version_number = serializers.CharField(source='model_version.version', read_only=True)
-    recorded_time = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = ModelPerformance
-        fields = [
-            'id', 'model_version', 'model_name', 'model_version_number', 
-            'accuracy', 'precision', 'recall', 'f1_score', 'loss', 
-            'confusion_matrix', 'recorded_at', 'recorded_time'
-        ]
-        read_only_fields = ['recorded_at', 'recorded_time']
-    
-    def get_recorded_time(self, obj):
-        return timesince(obj.recorded_at)
-
-# Serializer for Model Update
-class ModelUpdateSerializer(serializers.ModelSerializer):
-    updated_by_username = serializers.CharField(source='updated_by.username', read_only=True)
-    model_name = serializers.CharField(source='model_version.name', read_only=True)
-    model_version_number = serializers.CharField(source='model_version.version', read_only=True)
-    elapsed_time = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = ModelUpdate
-        fields = [
-            'id', 'model_version', 'model_name', 'model_version_number', 
-            'updated_by', 'updated_by_username', 'description', 'hyperparameters',
-            'status', 'started_at', 'completed_at', 'elapsed_time'
-        ]
-        read_only_fields = ['started_at', 'completed_at', 'elapsed_time']
-    
-    def get_elapsed_time(self, obj):
-        if obj.completed_at and obj.started_at:
-            duration = obj.completed_at - obj.started_at
-            seconds = duration.total_seconds()
-            return f"{seconds:.2f} seconds"
-        return "In progress"
-
-# Serializer for Usage Tracking
-class UsageTrackingSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(source='user.username', read_only=True)
-    
-    class Meta:
-        model = UsageTracking
-        fields = [
-            'id', 'user', 'username', 'endpoint', 'timestamp',
-            'response_time', 'status_code', 'request_data', 'response_data',
-            'ip_address'
-        ]
-        read_only_fields = ['timestamp']
-
 # Serializer for Subscription
 class SubscriptionSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
@@ -294,35 +199,6 @@ class InvoiceSerializer(serializers.ModelSerializer):
         if obj.status != 'overdue' or obj.due_date >= today:
             return 0
         return (today - obj.due_date).days
-
-# Serializer for Usage Quota
-class UsageQuotaSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(source='user.username', read_only=True)
-    api_calls_percent = serializers.SerializerMethodField()
-    data_usage_percent = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = UsageQuota
-        fields = [
-            'id', 'user', 'username', 'api_calls_used', 'data_usage',
-            'reset_date', 'api_calls_percent', 'data_usage_percent'
-        ]
-    
-    def get_api_calls_percent(self, obj):
-        subscription = Subscription.objects.filter(user=obj.user, is_active=True).first()
-        if subscription:
-            max_calls = subscription.max_api_calls
-            if max_calls > 0:
-                return round((obj.api_calls_used / max_calls) * 100, 2)
-        return 0
-    
-    def get_data_usage_percent(self, obj):
-        subscription = Subscription.objects.filter(user=obj.user, is_active=True).first()
-        if subscription:
-            max_data = subscription.max_data_usage
-            if max_data > 0:
-                return round((float(obj.data_usage) / max_data) * 100, 2)
-        return 0
 
 
 

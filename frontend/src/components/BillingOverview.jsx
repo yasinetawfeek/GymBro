@@ -7,13 +7,14 @@ import {
   PieChart, Filter, Download, ArrowDownRight, 
   ArrowUpRight, CheckCircle, Clock, XCircle, FileText,
   User, Search, X, CreditCard, Cpu, Layers, Database,
-  Zap, Shield, Award, Gem
+  Zap, Shield, Award, Gem, ChevronUp, ChevronDown
 } from 'lucide-react';
+import InvoiceDetailModal from './InvoiceDetailModal';
 
 const BillingOverview = ({ isDarkMode }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [billingData, setBillingData] = useState([]);
+  const [userBillingData, setUserBillingData] = useState([]);
   const [summary, setSummary] = useState(null);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -21,6 +22,10 @@ const BillingOverview = ({ isDarkMode }) => {
   const [subscriptionFilter, setSubscriptionFilter] = useState('');
   const [isFilterExpanded, setIsFilterExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Modal state
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState(null);
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   
   // Subscription related state
   const [currentSubscription, setCurrentSubscription] = useState(null);
@@ -126,16 +131,15 @@ const BillingOverview = ({ isDarkMode }) => {
       if (endDate) query.push(`end_date=${endDate}`);
       if (statusFilter) query.push(`status=${statusFilter}`);
       if (subscriptionFilter) query.push(`subscription=${subscriptionFilter}`);
-      if (searchQuery) query.push(`username=${searchQuery}`);
       
       const queryString = query.length > 0 ? `?${query.join('&')}` : '';
       
-      // Use the my_invoices endpoint instead of billing
+      // Use the my_invoices endpoint to get only the current user's invoices
       const response = await axios.get(`http://localhost:8000/api/invoices/my_invoices/${queryString}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
       });
       
-      console.log("Invoice data:", response.data);
+      console.log("User invoice data:", response.data);
       
       // Process the invoice data to ensure all required fields are present
       let processedData = [];
@@ -159,14 +163,14 @@ const BillingOverview = ({ isDarkMode }) => {
         });
       }
       
-      console.log("Processed invoice data:", processedData);
+      console.log("Processed user invoice data:", processedData);
       
       // Set the processed data
-      setBillingData(processedData);
+      setUserBillingData(processedData);
       setSummary(response.data.summary || {});
     } catch (err) {
-      console.error("Error fetching billing data:", err);
-      setError("Failed to fetch billing data. Please try again.");
+      console.error("Error fetching user billing data:", err);
+      setError("Failed to fetch your billing data. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -369,189 +373,39 @@ const BillingOverview = ({ isDarkMode }) => {
     };
   };
   
+  // Open invoice modal
+  const handleOpenInvoiceModal = (invoiceId) => {
+    setSelectedInvoiceId(invoiceId);
+    setIsInvoiceModalOpen(true);
+  };
+  
+  // Close invoice modal
+  const handleCloseInvoiceModal = () => {
+    setIsInvoiceModalOpen(false);
+    setSelectedInvoiceId(null);
+  };
+  
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
         <h2 className={`text-2xl font-light ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-          Billing <span className="text-purple-400 font-medium">Overview</span>
+          Your <span className="text-purple-400 font-medium">Invoices & Billing</span>
         </h2>
         
-        <div className="flex space-x-2">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setIsFilterExpanded(!isFilterExpanded)}
-            className={`${
-              isDarkMode 
-                ? 'bg-gray-800 hover:bg-gray-700 text-white border border-white/10' 
-                : 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200'
-            } px-3 py-2 rounded-lg flex items-center space-x-2 shadow-sm`}
-          >
-            <Filter className="w-4 h-4" />
-            <span className="text-sm font-medium">Filters</span>
-          </motion.button>
-          
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={fetchBillingData}
-            className={`${
-              isDarkMode 
-                ? 'bg-gray-800 hover:bg-gray-700 text-white border border-white/10' 
-                : 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200'
-            } px-3 py-2 rounded-lg flex items-center space-x-2 shadow-sm`}
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            <span className="text-sm font-medium">Refresh</span>
-          </motion.button>
-          
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className={`${
-              isDarkMode 
-                ? 'bg-gray-800 hover:bg-gray-700 text-white border border-white/10' 
-                : 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200'
-            } px-3 py-2 rounded-lg flex items-center space-x-2 shadow-sm`}
-          >
-            <Download className="w-4 h-4" />
-            <span className="text-sm font-medium">Export</span>
-          </motion.button>
-        </div>
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={fetchCurrentSubscription}
+          className={`mt-2 sm:mt-0 ${
+            isDarkMode 
+              ? 'bg-gray-800 hover:bg-gray-700 text-white border border-white/10' 
+              : 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200'
+          } px-3 py-2 rounded-lg flex items-center space-x-2 shadow-sm`}
+        >
+          <RefreshCw className={`w-4 h-4 ${subscriptionLoading ? 'animate-spin' : ''}`} />
+          <span className="text-sm font-medium">Refresh</span>
+        </motion.button>
       </div>
-      
-      <AnimatePresence>
-        {isFilterExpanded && (
-          <motion.div 
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className={`${
-              isDarkMode 
-                ? 'bg-gray-800 border border-white/10' 
-                : 'bg-gray-50 border border-gray-200'
-            } rounded-lg p-4 mb-6 overflow-hidden shadow-sm`}
-          >
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${
-                  isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                }`}>
-                  Start Date
-                </label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className={`w-full ${
-                    isDarkMode 
-                      ? 'bg-gray-700 border-gray-600 text-white focus:border-purple-500' 
-                      : 'bg-white border-gray-300 text-gray-800 focus:border-indigo-500'
-                  } border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 ${
-                    isDarkMode ? 'focus:ring-purple-500/30' : 'focus:ring-indigo-500/40'
-                  }`}
-                />
-              </div>
-              
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${
-                  isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                }`}>
-                  End Date
-                </label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className={`w-full ${
-                    isDarkMode 
-                      ? 'bg-gray-700 border-gray-600 text-white focus:border-purple-500' 
-                      : 'bg-white border-gray-300 text-gray-800 focus:border-indigo-500'
-                  } border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 ${
-                    isDarkMode ? 'focus:ring-purple-500/30' : 'focus:ring-indigo-500/40'
-                  }`}
-                />
-              </div>
-              
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${
-                  isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                }`}>
-                  Status
-                </label>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className={`w-full ${
-                    isDarkMode 
-                      ? 'bg-gray-700 border-gray-600 text-white focus:border-purple-500' 
-                      : 'bg-white border-gray-300 text-gray-800 focus:border-indigo-500'
-                  } border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 ${
-                    isDarkMode ? 'focus:ring-purple-500/30' : 'focus:ring-indigo-500/40'
-                  }`}
-                >
-                  <option value="">All Statuses</option>
-                  <option value="paid">Paid</option>
-                  <option value="pending">Pending</option>
-                  <option value="overdue">Overdue</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${
-                  isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                }`}>
-                  Subscription Type
-                </label>
-                <select
-                  value={subscriptionFilter}
-                  onChange={(e) => setSubscriptionFilter(e.target.value)}
-                  className={`w-full ${
-                    isDarkMode 
-                      ? 'bg-gray-700 border-gray-600 text-white focus:border-purple-500' 
-                      : 'bg-white border-gray-300 text-gray-800 focus:border-indigo-500'
-                  } border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 ${
-                    isDarkMode ? 'focus:ring-purple-500/30' : 'focus:ring-indigo-500/40'
-                  }`}
-                >
-                  <option value="">All Types</option>
-                  <option value="free">Free</option>
-                  <option value="basic">Basic</option>
-                  <option value="premium">Premium</option>
-                  <option value="enterprise">Enterprise</option>
-                </select>
-              </div>
-            </div>
-            
-            <div className="flex items-center mt-4 justify-end space-x-3">
-              <button
-                onClick={clearFilters}
-                className={`text-sm ${
-                  isDarkMode 
-                    ? 'text-gray-400 hover:text-gray-300' 
-                    : 'text-gray-600 hover:text-gray-800'
-                }`}
-              >
-                Clear Filters
-              </button>
-              
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={applyFilters}
-                className={`${
-                  isDarkMode 
-                    ? 'bg-purple-600 hover:bg-purple-700 text-white' 
-                    : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                } px-4 py-2 rounded-lg text-sm font-medium`}
-              >
-                Apply Filters
-              </motion.button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
       
       {error && (
         <div className={`p-4 rounded-lg mb-6 ${
@@ -572,228 +426,14 @@ const BillingOverview = ({ isDarkMode }) => {
             isDarkMode ? 'text-purple-400' : 'text-indigo-500'
           }`} />
           <span className={`ml-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-            Loading billing data...
+            Loading your billing data...
           </span>
         </div>
       ) : (
-        <>
-          {/* Summary Cards */}
-          {summary && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-              {/* Total Revenue Card */}
-              <motion.div
-                whileHover={{ y: -4 }}
-                className={`${
-                  isDarkMode 
-                    ? 'bg-gray-800 border border-white/10' 
-                    : 'bg-white border border-gray-200'
-                } rounded-xl p-5 shadow-lg`}
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <span className={`${
-                    isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                  } text-sm`}>Total Revenue</span>
-                  <div className={`${
-                    isDarkMode ? 'bg-green-900/30' : 'bg-green-100'
-                  } p-2 rounded-lg`}>
-                    <DollarSign className={`w-4 h-4 ${
-                      isDarkMode ? 'text-green-400' : 'text-green-600'
-                    }`} />
-                  </div>
-                </div>
-                <div className={`text-2xl font-bold ${
-                  isDarkMode ? 'text-white' : 'text-gray-800'
-                }`}>
-                  {formatCurrency(summary.total_amount)}
-                </div>
-                <div className="flex items-center mt-2">
-                  {calculateChange().positive ? (
-                    <ArrowUpRight className="w-3 h-3 text-green-500 mr-1" />
-                  ) : (
-                    <ArrowDownRight className="w-3 h-3 text-red-500 mr-1" />
-                  )}
-                  <span className={`text-xs ${
-                    calculateChange().positive ? 'text-green-500' : 'text-red-500'
-                  }`}>
-                    {calculateChange().amount}% from previous period
-                  </span>
-                </div>
-              </motion.div>
-              
-              {/* Total Invoices Card */}
-              <motion.div
-                whileHover={{ y: -4 }}
-                className={`${
-                  isDarkMode 
-                    ? 'bg-gray-800 border border-white/10' 
-                    : 'bg-white border border-gray-200'
-                } rounded-xl p-5 shadow-lg`}
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <span className={`${
-                    isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                  } text-sm`}>Total Invoices</span>
-                  <div className={`${
-                    isDarkMode ? 'bg-blue-900/30' : 'bg-blue-100'
-                  } p-2 rounded-lg`}>
-                    <FileText className={`w-4 h-4 ${
-                      isDarkMode ? 'text-blue-400' : 'text-blue-600'
-                    }`} />
-                  </div>
-                </div>
-                <div className={`text-2xl font-bold ${
-                  isDarkMode ? 'text-white' : 'text-gray-800'
-                }`}>
-                  {summary.total_records}
-                </div>
-                <div className="flex items-center mt-2">
-                  <ArrowUpRight className="w-3 h-3 text-green-500 mr-1" />
-                  <span className="text-xs text-green-500">
-                    5.2% from previous period
-                  </span>
-                </div>
-              </motion.div>
-              
-              {/* Pending Invoices */}
-              <motion.div
-                whileHover={{ y: -4 }}
-                className={`${
-                  isDarkMode 
-                    ? 'bg-gray-800 border border-white/10' 
-                    : 'bg-white border border-gray-200'
-                } rounded-xl p-5 shadow-lg`}
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <span className={`${
-                    isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                  } text-sm`}>Pending Invoices</span>
-                  <div className={`${
-                    isDarkMode ? 'bg-amber-900/30' : 'bg-amber-100'
-                  } p-2 rounded-lg`}>
-                    <Clock className={`w-4 h-4 ${
-                      isDarkMode ? 'text-amber-400' : 'text-amber-600'
-                    }`} />
-                  </div>
-                </div>
-                <div className={`text-2xl font-bold ${
-                  isDarkMode ? 'text-white' : 'text-gray-800'
-                }`}>
-                  {summary.status_counts?.pending || 0}
-                </div>
-                <div className="flex items-center mt-2">
-                  <span className={`text-xs ${
-                    isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                  }`}>
-                    Requires attention
-                  </span>
-                </div>
-              </motion.div>
-              
-              {/* Overdue Invoices */}
-              <motion.div
-                whileHover={{ y: -4 }}
-                className={`${
-                  isDarkMode 
-                    ? 'bg-gray-800 border border-white/10' 
-                    : 'bg-white border border-gray-200'
-                } rounded-xl p-5 shadow-lg`}
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <span className={`${
-                    isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                  } text-sm`}>Overdue Invoices</span>
-                  <div className={`${
-                    isDarkMode ? 'bg-red-900/30' : 'bg-red-100'
-                  } p-2 rounded-lg`}>
-                    <AlertCircle className={`w-4 h-4 ${
-                      isDarkMode ? 'text-red-400' : 'text-red-600'
-                    }`} />
-                  </div>
-                </div>
-                <div className={`text-2xl font-bold ${
-                  isDarkMode ? 'text-white' : 'text-gray-800'
-                }`}>
-                  {summary.status_counts?.overdue || 0}
-                </div>
-                <div className="flex items-center mt-2">
-                  <span className={`text-xs ${
-                    isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                  }`}>
-                    Requires immediate action
-                  </span>
-                </div>
-              </motion.div>
-            </div>
-          )}
-          
-          {/* Search Bar */}
-          <div className="relative flex mb-6">
-            <div className="relative flex-grow">
-              <Search className={`w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 ${
-                isDarkMode ? 'text-gray-400' : 'text-gray-500'
-              }`} />
-              <input
-                type="text"
-                placeholder="Search by username..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={`w-full ${
-                  isDarkMode 
-                    ? 'bg-gray-800 text-white border border-white/10 focus:border-purple-500' 
-                    : 'bg-white text-gray-800 border border-gray-200 focus:border-indigo-500'
-                } rounded-lg pl-10 pr-4 py-2 focus:outline-none focus:ring-1 ${
-                  isDarkMode ? 'focus:ring-purple-500/30' : 'focus:ring-indigo-500/40'
-                } shadow-md`}
-              />
-              {searchQuery && (
-                <button 
-                  onClick={() => {
-                    setSearchQuery('');
-                    fetchBillingData();
-                  }}
-                  className={`absolute right-3 top-1/2 transform -translate-y-1/2 ${
-                    isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-            
-            <button
-              onClick={fetchBillingData}
-              className={`ml-2 px-4 py-2 rounded-lg ${
-                isDarkMode 
-                  ? 'bg-purple-600 hover:bg-purple-700 text-white' 
-                  : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-              }`}
-            >
-              Search
-            </button>
-          </div>
-          
+        <>          
           {/* Subscription Section */}
           <div className="mb-8">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6">
-              <h3 className={`text-xl font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                Your Subscription
-              </h3>
-              
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={fetchCurrentSubscription}
-                className={`mt-2 sm:mt-0 ${
-                  isDarkMode 
-                    ? 'bg-gray-800 hover:bg-gray-700 text-white border border-white/10' 
-                    : 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200'
-                } px-3 py-2 rounded-lg flex items-center space-x-2 shadow-sm`}
-              >
-                <RefreshCw className={`w-4 h-4 ${subscriptionLoading ? 'animate-spin' : ''}`} />
-                <span className="text-sm font-medium">Refresh Subscription</span>
-              </motion.button>
-            </div>
-            
+
             {subscriptionError && (
               <div className={`p-4 rounded-lg mb-6 ${
                 isDarkMode 
@@ -1055,8 +695,8 @@ const BillingOverview = ({ isDarkMode }) => {
             <div className={`grid grid-cols-12 gap-4 px-6 py-4 border-b ${
               isDarkMode ? 'border-white/5 bg-black/20' : 'border-gray-200 bg-gray-50'
             }`}>
-              <div className="col-span-2 md:col-span-3 font-medium text-xs uppercase tracking-wider">
-                <span className={isDarkMode ? 'text-purple-400' : 'text-indigo-500'}>User</span>
+              <div className="col-span-3 font-medium text-xs uppercase tracking-wider">
+                <span className={isDarkMode ? 'text-purple-400' : 'text-indigo-500'}>Invoice</span>
               </div>
               <div className="col-span-2 font-medium text-xs uppercase tracking-wider">
                 <span className={isDarkMode ? 'text-purple-400' : 'text-indigo-500'}>Amount</span>
@@ -1075,17 +715,17 @@ const BillingOverview = ({ isDarkMode }) => {
               </div>
             </div>
             
-            {billingData.length === 0 ? (
+            {userBillingData.length === 0 ? (
               <div className={`py-16 text-center ${
                 isDarkMode ? 'text-gray-400' : 'text-gray-500'
               }`}>
                 <FileText className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                <p className="text-lg">No billing records found</p>
-                <p className="text-sm mt-1 opacity-75">Try adjusting your filters</p>
+                <p className="text-lg">No invoices found</p>
+                <p className="text-sm mt-1 opacity-75">You don't have any billing history yet</p>
               </div>
             ) : (
               <div className={`divide-y ${isDarkMode ? 'divide-white/5' : 'divide-gray-200'}`}>
-                {billingData.map((record) => (
+                {userBillingData.map((record) => (
                   <motion.div
                     key={record.id}
                     whileHover={{ 
@@ -1093,11 +733,11 @@ const BillingOverview = ({ isDarkMode }) => {
                     }}
                     className="grid grid-cols-12 gap-4 px-6 py-4 items-center"
                   >
-                    <div className="col-span-2 md:col-span-3 flex items-center space-x-3">
+                    <div className="col-span-3 flex items-center space-x-3">
                       <div className={`${
                         isDarkMode ? 'bg-gray-700' : 'bg-gray-100'
                       } p-2 rounded-full`}>
-                        <User className={`w-4 h-4 ${
+                        <FileText className={`w-4 h-4 ${
                           isDarkMode ? 'text-gray-300' : 'text-gray-600'
                         }`} />
                       </div>
@@ -1105,12 +745,12 @@ const BillingOverview = ({ isDarkMode }) => {
                         <div className={`font-medium truncate ${
                           isDarkMode ? 'text-white' : 'text-gray-800'
                         }`}>
-                          {record.username}
+                          Invoice #{record.id}
                         </div>
                         <div className={`text-xs truncate ${
                           isDarkMode ? 'text-gray-400' : 'text-gray-500'
                         }`}>
-                          {record.email}
+                          {record.description || "Billing period"}
                         </div>
                       </div>
                     </div>
@@ -1153,15 +793,17 @@ const BillingOverview = ({ isDarkMode }) => {
                     </div>
                     
                     <div className="col-span-1 flex justify-end">
-                      <Link to={`/invoices/${record.id}`}>
-                        <button className={`p-1 rounded-lg ${
+                      <button
+                        onClick={() => handleOpenInvoiceModal(record.id)}
+                        className={`p-1 rounded-lg ${
                           isDarkMode 
                             ? 'hover:bg-gray-700 text-gray-400 hover:text-white' 
                             : 'hover:bg-gray-100 text-gray-500 hover:text-gray-800'
-                        }`}>
-                          <FileText className="w-4 h-4" />
-                        </button>
-                      </Link>
+                        }`}
+                        aria-label="View invoice details"
+                      >
+                        <FileText className="w-4 h-4" />
+                      </button>
                     </div>
                   </motion.div>
                 ))}
@@ -1170,6 +812,21 @@ const BillingOverview = ({ isDarkMode }) => {
           </div>
         </>
       )}
+      
+      {/* Invoice Detail Modal */}
+      <AnimatePresence>
+        {isInvoiceModalOpen && (
+          <InvoiceDetailModal
+            isDarkMode={isDarkMode}
+            invoiceId={selectedInvoiceId}
+            onClose={handleCloseInvoiceModal}
+            onPaymentSuccess={() => {
+              // Refresh billing data after successful payment
+              fetchBillingData();
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };
