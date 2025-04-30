@@ -64,21 +64,32 @@
 
 ## Feature 4: Machine Learning Service
 **Backend:**
-- Implement ML model integration
-- Create prediction API endpoint
+- ~~Implement ML model integration~~ ✓ (Already implemented with workout_classifer_model.py)
+- ~~Create prediction API endpoint~~ ✓ (Already implemented in pose_correction_server.py)
 - Store model performance metrics
+  - Create Django models for tracking confidence scores, response times, and accuracy
+  - Implement periodic logging of model performance metrics
+  - Add API endpoints to retrieve performance data
 - Add usage tracking per user request
+  - Create usage tracking models to record ML service requests
+  - Track user ID, timestamp, model type, and request metadata
+  - Implement rate limiting and quota system for AI feature access
 
 **Frontend:**
-- Build file upload interface for data
-- Create results visualization component
-- Add loading states and error handling
+- ~~Build file upload interface for data~~ ✓ (Already implemented in WorkoutPage.jsx)
+- Create admin dashboard for ML metrics
+  - Display usage statistics (requests per day/hour)
+  - Show model performance trends over time
+  - Provide user activity visualizations 
 - Implement usage tracking display
+  - Show personal usage statistics to users
+  - Display quota information for AI Engineer and Admin roles
 
 **Checks:**
-- 1.2: Edmond uploads data and receives prediction ✓
-- 3.1: Dr First logs in to AI dashboard ✓
-- 3.2: Dr First views system performance ✓
+- ~~1.2: Edmond uploads data and receives prediction~~ ✓ (Already implemented)
+- 3.1: Dr First logs in to AI dashboard and views usage statistics
+- 3.2: Dr First views system performance metrics and model accuracy
+- 3.3: Admin can see user feedback on model predictions
 
 ## Feature 5: Model Management
 **Backend:**
