@@ -18,6 +18,7 @@ import ApprovalRequests from '../components/ApprovalRequests';
 import BillingOverview from '../components/BillingOverview';
 import AdminBillingActivity from '../components/AdminBillingActivity';
 import ModelPerformance from '../components/ModelPerformance';
+import MLModels from '../components/MLModels';
 
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -445,6 +446,9 @@ const AccountManagement = () => {
       case 'performance':
         console.log("Rendering ModelPerformance component");
         return <ModelPerformance isDarkMode={isDarkMode} />;
+      case 'models':
+        console.log("Rendering MLModels component");
+        return <MLModels isDarkMode={isDarkMode} />;
       default:
         console.log("No matching component for active page:", activePage);
         return <div>Page not found</div>;

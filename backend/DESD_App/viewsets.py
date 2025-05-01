@@ -22,8 +22,8 @@ from dotenv import load_dotenv
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.db.models import Count, Sum, Avg, Max, Min
-from .models import UsageRecord, ModelPerformanceMetric
-from .serializers import UsageRecordSerializer, ModelPerformanceMetricSerializer
+from .models import UsageRecord, ModelPerformanceMetric, MLModel
+from .serializers import UsageRecordSerializer, ModelPerformanceMetricSerializer, MLModelSerializer
 
 # Load environment variables
 load_dotenv()
@@ -1326,6 +1326,88 @@ class ModelPerformanceViewSet(viewsets.ModelViewSet):
         
         # print(f"[PERFORMANCE DEBUG] ✅ Returning data with {len(workout_performance)} workout types and {len(trend)} trend points")
         return Response(response_data)
+
+class MLModelViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for managing ML models.
+    Only accessible by Admins and ML Engineers.
+    """
+    serializer_class = MLModelSerializer
+    permission_classes = [IsAuthenticated, IsAdminRole | IsMachineLearningExpert]
+    queryset = MLModel.objects.all()
+    
+    def get_queryset(self):
+        """Get all models, ordered by type and deployment status"""
+        return MLModel.objects.all().order_by('model_type', '-deployed', 'name')
+    
+    @action(detail=True, methods=['post'])
+    def deploy(self, request, pk=None):
+        """Deploy a specific model (and undeploy others of same type)"""
+        model = self.get_object()
+        model.deployed = True
+        model.save()  # The save method handles undeploying other models
+        
+        return Response({
+            'status': 'success',
+            'message': f'Model {model.name} deployed successfully'
+        })
+    
+    @action(detail=True, methods=['post'])
+    def undeploy(self, request, pk=None):
+        """Undeploy a specific model"""
+        model = self.get_object()
+        model.deployed = False
+        model.save()
+        
+        return Response({
+            'status': 'success',
+            'message': f'Model {model.name} undeployed successfully'
+        })
+    
+    @action(detail=True, methods=['post'])
+    def update_hyperparameters(self, request, pk=None):
+        """Update hyperparameters for a specific model"""
+        model = self.get_object()
+        
+        # Extract hyperparameters from request
+        learning_rate = request.data.get('learning_rate')
+        epochs = request.data.get('epochs')
+        batch_size = request.data.get('batch_size')
+        
+        if learning_rate is not None:
+            model.learning_rate = float(learning_rate)
+        
+        if epochs is not None:
+            model.epochs = int(epochs)
+            
+        if batch_size is not None:
+            model.batch_size = int(batch_size)
+        
+        model.save()
+        
+        return Response({
+            'status': 'success',
+            'message': f'Hyperparameters for {model.name} updated successfully',
+            'learning_rate': model.learning_rate,
+            'epochs': model.epochs,
+            'batch_size': model.batch_size
+        })
+    
+    @action(detail=False, methods=['get'])
+    def by_type(self, request):
+        """Get models grouped by type"""
+        model_types = dict(MLModel.MODEL_TYPES)
+        results = {}
+        
+        for type_key, type_name in model_types.items():
+            models = MLModel.objects.filter(model_type=type_key)
+            serializer = self.get_serializer(models, many=True)
+            results[type_key] = {
+                'name': type_name,
+                'models': serializer.data
+            }
+        
+        return Response(results)
 
 
 

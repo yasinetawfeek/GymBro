@@ -24,19 +24,19 @@ const Sidebar = ({ isMenuOpen, userRole, activePage, setActivePage, setIsMenuOpe
       { id: 'billing', label: 'Billing Overview', icon: DollarSign },
       { id: 'billingActivity', label: 'Billing Activity', icon: BarChart },
       { id: 'stats', label: 'Stats', icon: ActivitySquare },
-      { id: 'analytics', label: 'Analytics', icon: PieChart },
+      // { id: 'analytics', label: 'Analytics', icon: PieChart },
       { id: 'performance', label: 'Model Performance', icon: TrendingUp },
       { id: 'models', label: 'ML Models', icon: Brain },
-      { id: 'settings', label: 'System Settings', icon: Settings }
+      // { id: 'settings', label: 'System Settings', icon: Settings }
     ],
     'AI Engineer': [
       { id: 'profile', label: 'My Profile', icon: User },
       { id: 'stats', label: 'Stats', icon: ActivitySquare },
       { id: 'models', label: 'ML Models', icon: Brain },
       { id: 'performance', label: 'Model Performance', icon: TrendingUp },
-      { id: 'data', label: 'Training Data', icon: Database },
-      { id: 'api', label: 'API Access', icon: Terminal },
-      { id: 'docs', label: 'Documentation', icon: FileText }
+      // { id: 'data', label: 'Training Data', icon: Database },
+      // { id: 'api', label: 'API Access', icon: Terminal },
+      // { id: 'docs', label: 'Documentation', icon: FileText }
     ]
   };
 

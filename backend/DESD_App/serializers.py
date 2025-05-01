@@ -265,6 +265,19 @@ class ModelPerformanceMetricSerializer(serializers.ModelSerializer):
         else:
             return "Poor"
 
+class MLModelSerializer(serializers.ModelSerializer):
+    model_type_display = serializers.CharField(source='get_model_type_display', read_only=True)
+    
+    class Meta:
+        model = MLModel
+        fields = [
+            'id', 'name', 'model_type', 'model_type_display', 'version',
+            'learning_rate', 'epochs', 'batch_size', 
+            'accuracy', 'deployed', 'created_at', 
+            'updated_at', 'last_trained'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
 
 
 

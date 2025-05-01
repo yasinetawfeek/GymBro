@@ -13,6 +13,7 @@ router.register(r'invoices', InvoiceViewSet, basename='invoice')  # Register Inv
 router.register(r'subscriptions', SubscriptionViewSet, basename='subscription')  # Register SubscriptionViewSet
 router.register(r'usage', UsageTrackingViewSet, basename='usage')
 router.register(r'model-performance', ModelPerformanceViewSet, basename='model-performance')
+router.register(r'ml-models', MLModelViewSet, basename='ml-models')
 
 # urlpatterns = router.urls
 
