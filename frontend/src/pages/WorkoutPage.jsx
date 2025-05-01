@@ -8,6 +8,7 @@ import io from 'socket.io-client';
 import Model from 'react-body-highlighter';
 import { MuscleType, ModelType } from 'react-body-highlighter';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext'; // Add this import
 
 // Lucide icons for a more consistent look
 import { 
@@ -83,13 +84,54 @@ const getArrowColor = (distance) => {
 };
 
 const drawArrow = (ctx, fromX, fromY, toX, toY, color, lineWidth) => {
-  const headLength = 15; const dx = toX - fromX; const dy = toY - fromY;
-  const angle = Math.atan2(dy, dx); ctx.beginPath(); ctx.moveTo(fromX, fromY);
-  ctx.lineTo(toX, toY); ctx.strokeStyle = color; ctx.lineWidth = lineWidth; ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(toX, toY);
-  ctx.lineTo(toX - headLength * Math.cos(angle - Math.PI/6), toY - headLength * Math.sin(angle - Math.PI/6));
-  ctx.lineTo(toX - headLength * Math.cos(angle + Math.PI/6), toY - headLength * Math.sin(angle + Math.PI/6));
-  ctx.closePath(); ctx.fillStyle = color; ctx.fill();
+  // Convert all coordinates to integers to avoid subpixel rendering issues
+  fromX = Math.round(fromX);
+  fromY = Math.round(fromY);
+  toX = Math.round(toX);
+  toY = Math.round(toY);
+  
+  const headLength = 15; 
+  const dx = toX - fromX; 
+  const dy = toY - fromY;
+  
+  // Skip drawing very small/insignificant arrows
+  const magnitude = Math.sqrt(dx * dx + dy * dy);
+  if (magnitude < 5) return;
+  
+  const angle = Math.atan2(dy, dx);
+  
+  // Save the current state
+  ctx.save();
+  
+  // Apply anti-aliasing and better line joins
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  
+  // Draw the arrow shaft with nicer settings
+  ctx.beginPath();
+  ctx.moveTo(fromX, fromY);
+  ctx.lineTo(toX, toY);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.stroke();
+  
+  // Draw the arrowhead as a filled path
+  ctx.beginPath();
+  ctx.moveTo(toX, toY);
+  ctx.lineTo(
+    Math.round(toX - headLength * Math.cos(angle - Math.PI/6)),
+    Math.round(toY - headLength * Math.sin(angle - Math.PI/6))
+  );
+  ctx.lineTo(
+    Math.round(toX - headLength * Math.cos(angle + Math.PI/6)),
+    Math.round(toY - headLength * Math.sin(angle + Math.PI/6))
+  );
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  
+  // Restore the context state
+  ctx.restore();
 };
 
 // --- Drawing functions ---
@@ -112,36 +154,149 @@ const drawUserPose = (ctx, landmarks, canvasWidth, canvasHeight) => {
   });
 };
 
-const findJointsToCorrect = (landmarks, corrections) => {
-  if (!landmarks || !corrections || Object.keys(corrections).length === 0) { return []; }
-  const correctJoints = [];
-  Object.keys(corrections).forEach(indexStr => {
-    const i = parseInt(indexStr); const correction = corrections[indexStr];
-    if (correction && correction.x != null && correction.y != null &&
-        (Math.abs(correction.x) > 0.01 || Math.abs(correction.y) > 0.01) &&
-        i < landmarks.length && landmarks[i]) {
-      const jointName = getJointName(i);
-      if (jointName) { correctJoints.push({ name: jointName, index: i, correction: correction }); }
+// Add smooth correction tracking
+const SMOOTHING_FACTOR = 0.7; // Higher = more smoothing
+let previousCorrections = {};
+
+// Add this smoothing function right above the findJointsToCorrect function
+const smoothCorrections = (newCorrections, prevCorrections) => {
+  if (!newCorrections || Object.keys(newCorrections).length === 0) {
+    return prevCorrections;
+  }
+  
+  if (!prevCorrections || Object.keys(prevCorrections).length === 0) {
+    return newCorrections;
+  }
+  
+  const smoothedCorrections = {};
+  
+  // Process all keys from the new corrections
+  Object.keys(newCorrections).forEach(key => {
+    if (prevCorrections[key]) {
+      // Apply smoothing if we have previous data for this joint
+      smoothedCorrections[key] = {
+        x: SMOOTHING_FACTOR * prevCorrections[key].x + (1 - SMOOTHING_FACTOR) * newCorrections[key].x,
+        y: SMOOTHING_FACTOR * prevCorrections[key].y + (1 - SMOOTHING_FACTOR) * newCorrections[key].y
+      };
+    } else {
+      // No previous data, use new data directly
+      smoothedCorrections[key] = newCorrections[key];
     }
   });
-  return correctJoints;
+  
+  // Also include joints from previous corrections that might not be in new data
+  // This helps prevent sudden disappearances
+  Object.keys(prevCorrections).forEach(key => {
+    if (!newCorrections[key]) {
+      // Apply decay to previous corrections that are no longer present
+      smoothedCorrections[key] = {
+        x: prevCorrections[key].x * 0.8, // Gradual fade out
+        y: prevCorrections[key].y * 0.8
+      };
+      
+      // Remove very small corrections to avoid visual noise
+      if (Math.abs(smoothedCorrections[key].x) < 0.005 && Math.abs(smoothedCorrections[key].y) < 0.005) {
+        delete smoothedCorrections[key];
+      }
+    }
+  });
+  
+  return smoothedCorrections;
+};
+
+const findJointsToCorrect = (landmarks, corrections) => {
+  // Add debugging
+  if (!landmarks) {
+    console.log('[findJointsToCorrect] No landmarks provided');
+    return [];
+  }
+  
+  if (!corrections) {
+    return [];
+  }
+  
+  if (Object.keys(corrections).length === 0) {
+    return [];
+  }
+  
+  try {
+    const correctJoints = [];
+    Object.keys(corrections).forEach(indexStr => {
+      const i = parseInt(indexStr);
+      const correction = corrections[indexStr];
+      
+      // Make sure we have valid landmarks and index
+      if (i >= 0 && i < landmarks.length && landmarks[i]) {
+        // Make sure correction has valid x/y values
+        if (correction && typeof correction === 'object') {
+          const corrX = correction.x !== undefined ? correction.x : 0;
+          const corrY = correction.y !== undefined ? correction.y : 0;
+          
+          // Only include if the correction magnitude is significant
+          if ((Math.abs(corrX) > 0.01 || Math.abs(corrY) > 0.01)) {
+            const jointName = getJointName(i);
+            if (jointName) {
+              correctJoints.push({ name: jointName, index: i, correction: {x: corrX, y: corrY} });
+            }
+          }
+        }
+      }
+    });
+    
+    return correctJoints;
+  } catch (e) {
+    console.error('[findJointsToCorrect] Error processing corrections:', e);
+    return [];
+  }
 };
 
 const drawCorrectionArrows = (ctx, landmarks, corrections, jointsToCorrect, canvasWidth, canvasHeight) => {
   if (!landmarks || !corrections || jointsToCorrect.length === 0) { return; }
+  
+  // Set proper composite operation for cleaner overlapping
+  ctx.globalCompositeOperation = 'source-over';
+  
   jointsToCorrect.forEach(joint => {
     const i = joint.index;
     if (!landmarks[i] || landmarks[i].x == null || landmarks[i].y == null) { return; }
-    const originalX = landmarks[i].x * canvasWidth; const originalY = landmarks[i].y * canvasHeight;
+    
+    const originalX = landmarks[i].x * canvasWidth; 
+    const originalY = landmarks[i].y * canvasHeight;
+    
     const correction = corrections[String(i)];
     if (!correction || correction.x == null || correction.y == null) { return; }
-    const vectorX = correction.x * canvasWidth; const vectorY = correction.y * canvasHeight;
-    const targetX = originalX + vectorX; const targetY = originalY + vectorY;
-    const extendedTargetX = originalX + vectorX * 1.5; const extendedTargetY = originalY + vectorY * 1.5;
+    
+    const vectorX = correction.x * canvasWidth; 
+    const vectorY = correction.y * canvasHeight;
+    
+    // Only draw if magnitude is significant
+    const magnitude = Math.sqrt(vectorX * vectorX + vectorY * vectorY);
+    if (magnitude < 2) { return; } // Skip tiny corrections that cause flicker
+    
+    const targetX = originalX + vectorX; 
+    const targetY = originalY + vectorY;
+    
+    // Use a consistent extension factor
+    const extendedTargetX = originalX + vectorX * 1.5; 
+    const extendedTargetY = originalY + vectorY * 1.5;
+    
     const correctionMagnitude = Math.sqrt(correction.x * correction.x + correction.y * correction.y);
     const arrowColor = getArrowColor(correctionMagnitude);
-    drawArrow(ctx, originalX, originalY, extendedTargetX, extendedTargetY, arrowColor, 6);
+    
+    // Use whole numbers to avoid anti-aliasing issues
+    drawArrow(
+      ctx, 
+      Math.round(originalX), 
+      Math.round(originalY), 
+      Math.round(extendedTargetX), 
+      Math.round(extendedTargetY), 
+      arrowColor, 
+      6
+    );
   });
+  
+  // Reset composite operation
+  ctx.globalCompositeOperation = 'source-over';
 };
 
 // --- UI Components ---
@@ -452,6 +607,7 @@ const CustomNotification = ({ type, message, onClose }) => {
   );
 };
 
+// First, update the InfoPanel component definition to accept pendingUpdates as a prop
 const InfoPanel = ({ 
   currentWorkout, 
   predictedWorkout, 
@@ -461,8 +617,19 @@ const InfoPanel = ({
   muscleGroupConfidence,
   feedbackLatency,
   receivedCount,
-  connectionStatus
+  connectionStatus,
+  onForceUpdate,
+  pendingUpdates,
+  sessionDuration
 }) => {
+  // Format the session duration into a readable format
+  const formatDuration = (seconds) => {
+    if (!seconds) return '0:00';
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+  };
+
   return (
     <motion.div 
       className="bg-black/60 text-white px-5 py-3 rounded-xl backdrop-blur-md border border-white/10 shadow-lg"
@@ -476,6 +643,11 @@ const InfoPanel = ({
             <span className="text-sm font-medium opacity-70">Current:</span>
             <span className="ml-2 font-semibold">{workoutMap[currentWorkout]}</span>
           </div>          
+          {/* Add session timer here */}
+          <div className="flex items-center text-xs">
+            <span className="opacity-70 mr-1">Session:</span>
+            <span className="font-mono">{formatDuration(sessionDuration)}</span>
+          </div>
         </div>
 
         {predictedWorkout !== currentWorkout && (
@@ -537,13 +709,32 @@ const InfoPanel = ({
           </div>
         )}
         
-        <div className="flex items-center justify-center text-xs opacity-60 space-x-4">
-          {(feedbackLatency > 0 || receivedCount > 0) && (
-            <>
-              <span>Latency: {feedbackLatency > 0 ? `${feedbackLatency}ms` : 'N/A'}</span>
-              <span>Corrections: {receivedCount}</span>
-            </>
-          )}
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center space-x-4">
+            {(feedbackLatency > 0 || receivedCount > 0) && (
+              <>
+                <span>Latency: {feedbackLatency > 0 ? `${feedbackLatency}ms` : 'N/A'}</span>
+                <span className="flex items-center">
+                  Corrections: 
+                  <span className="font-semibold ml-1">{receivedCount}</span>
+                  <button 
+                    onClick={onForceUpdate}
+                    className="ml-1 p-1 bg-purple-500/20 rounded-full hover:bg-purple-500/40 transition-colors"
+                    title="Update Usage Stats"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                  </button>
+                  <span 
+                    id="auto-update-indicator" 
+                    className={`w-2 h-2 ml-1 rounded-full ${
+                      pendingUpdates > 0 ? 'bg-yellow-500/50' : 'bg-gray-500/50'
+                    }`}
+                    title={pendingUpdates > 0 ? `${pendingUpdates} updates pending` : 'No updates pending'}
+                  ></span>
+                </span>
+              </>
+            )}
+          </div>
           <span className="flex items-center">
             <div className={`w-1.5 h-1.5 rounded-full mr-1 ${
               connectionStatus === 'connected' ? 'bg-green-500' : 
@@ -561,6 +752,7 @@ const InfoPanel = ({
 // --- Main TrainingPage Component ---
 const TrainingPage = () => {
   const navigate = useNavigate();
+  const { token } = useAuth(); // Get auth token from context
   const [isDarkMode, setIsDarkMode] = useState(false);
   const webcamRef = useRef(null);
   const canvasRef = useRef(null);
@@ -574,10 +766,31 @@ const TrainingPage = () => {
   const lastCorrectionTimeRef = useRef(0);
   const [feedbackLatency, setFeedbackLatency] = useState(0);
   const [receivedCount, setReceivedCount] = useState(0);
+  const receivedCountRef = useRef(0);
   const poseInstanceRef = useRef(null);
   const cameraInstanceRef = useRef(null);
   const sendIntervalRef = useRef(null);
+  const sessionDurationTimerRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  // Add these new refs for tracking updates
+  const lastAutoUpdateTimeRef = useRef(0);
+  const pendingStatsRef = useRef({
+    framesProcessed: 0,
+    correctionsSent: 0,
+    sessionDuration: 0
+  });
+  
+  // Add session tracking state
+  const [sessionId, setSessionId] = useState(null);
+  const [sessionStartTime, setSessionStartTime] = useState(null);
+  const [sessionStats, setSessionStats] = useState({
+    framesProcessed: 0,
+    correctionsSent: 0
+  });
+  
+  // Add state for tracking session duration
+  const [sessionDuration, setSessionDuration] = useState(0);
   
   // Add state for muscle visualizer toggle
   const [showMuscleVisualizer, setShowMuscleVisualizer] = useState(true);
@@ -631,6 +844,9 @@ const TrainingPage = () => {
   // Add notification queue
   const [notificationQueue, setNotificationQueue] = useState([]);
   const [isProcessingNotification, setIsProcessingNotification] = useState(false);
+  
+  // Add this at the top of the component function where other refs are defined
+  const correctionsUpdateTimerRef = useRef(null);
   
   // Function to add a notification to the queue
   const addNotification = (notificationData) => {
@@ -694,6 +910,37 @@ const TrainingPage = () => {
     
     // Also update the ref to ensure synchronous blocking of future changes
     nextAllowedChangeTimeRef.current = Date.now() + NOTIFICATION_COOLDOWN;
+    
+    // If we have an active session, update the backend with the new workout type
+    if (sessionId && token) {
+      // Send an immediate update to the server with the new workout type
+      const currentDurationInSeconds = sessionStartTime ? Math.floor((Date.now() - sessionStartTime) / 1000) : 0;
+      
+      fetch(`http://localhost:8000/api/usage/update_metrics/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          session_id: sessionId,
+          workout_type: parsedId,
+          session_duration: currentDurationInSeconds,
+          frames_processed: 0,  // No new frames in this update
+          corrections_sent: 0   // No new corrections in this update
+        })
+      })
+      .then(response => {
+        if (response.ok) {
+          console.log(`[Handle Workout Change] Backend updated with new workout type: ${workoutMap[parsedId]}`);
+        } else {
+          console.error('[Handle Workout Change] Failed to update backend:', response.statusText);
+        }
+      })
+      .catch(error => {
+        console.error('[Handle Workout Change] Error updating backend:', error);
+      });
+    }
   };
 
   // Replace the updateStableWorkoutPrediction function with improved auto-change approach
@@ -883,78 +1130,425 @@ const TrainingPage = () => {
       if (socketRef.current) { socketRef.current.disconnect(); }
       console.log('[Socket Setup] Attempting to connect WebSocket...');
       setConnectionStatus("connecting");
-      socketRef.current = io('http://localhost:8001', {
-        reconnection: true, reconnectionAttempts: Infinity, reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000, timeout: 10000, transports: ['websocket']
-      });
-      socketRef.current.on('connect', () => { 
-        console.log('[Socket Status] WebSocket connected. ID:', socketRef.current?.id); 
-        setConnectionStatus("connected"); 
-      });
-      socketRef.current.on('disconnect', (reason) => { 
-        console.warn('[Socket Status] WebSocket disconnected. Reason:', reason); 
-        setConnectionStatus("disconnected"); 
-      });
-      socketRef.current.on('connect_error', (error) => { 
-        console.error('[Socket Status] WebSocket connection error:', error); 
-        setConnectionStatus("disconnected"); 
-      });
-      socketRef.current.on('connected', (data) => { 
-        console.log('[Socket Event] Received "connected" confirmation:', data); 
-      });
-
-      // --- Corrections Handler ---
-      socketRef.current.on('pose_corrections', (data) => {
-        // Update the ref with the latest data immediately
-        latestCorrectionsRef.current = data;
-
-        // Update state as well (might trigger other UI updates)
-        setCorrections(data);
-
-        // Check if there's a predicted workout type in the data
-        if (data.predicted_workout_type !== undefined) {
-          // Instead of directly setting the workout, update our stable prediction
-          updateStableWorkoutPrediction(data.predicted_workout_type);
-        }
+      
+      // Add auth token to connection if available
+      const socketOptions = {
+        reconnection: true, 
+        reconnectionAttempts: Infinity, 
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000, 
+        timeout: 10000, 
+        transports: ['websocket']
+      };
+      
+      // Add auth token if available
+      if (token) {
+        console.log('[Socket Setup] Adding auth token to connection');
+        socketOptions.auth = { token };
+      } else {
+        console.log('[Socket Setup] No auth token available');
+      }
+      
+      console.log('[Socket Setup] Connecting to WebSocket server at http://localhost:8001');
+      try {
+        socketRef.current = io('http://localhost:8001', socketOptions);
         
-        // Check if there's a predicted muscle group in the data
-        if (data.predicted_muscle_group !== undefined) {
-          // Update our stable muscle group prediction
-          updateStableMuscleGroupPrediction(data.predicted_muscle_group);
-        }
+        socketRef.current.on('connect', () => { 
+          console.log('[Socket Status] WebSocket connected successfully. Socket ID:', socketRef.current?.id); 
+          setConnectionStatus("connected");
+          setSessionStartTime(Date.now());
+        });
+        
+        socketRef.current.on('disconnect', (reason) => { 
+          console.warn('[Socket Status] WebSocket disconnected. Reason:', reason); 
+          setConnectionStatus("disconnected");
+          
+          // Report final session stats if we had a session
+          if (sessionId) {
+            reportFinalSessionStats();
+          }
+        });
+        
+        socketRef.current.on('connect_error', (error) => { 
+          console.error('[Socket Status] WebSocket connection error:', error); 
+          console.error('[Socket Status] Error details:', error.message || 'Unknown error');
+          setConnectionStatus("disconnected"); 
+        });
+        
+        socketRef.current.on('connected', (data) => { 
+          console.log('[Socket Event] Received "connected" confirmation:', data);
+          
+          // Store session ID if provided and ensure we start a new session on the backend
+          if (data.session_id) {
+            console.log('[Socket Event] Session ID received:', data.session_id);
+            setSessionId(data.session_id);
+            
+            // Reset session stats on new connection
+            setSessionStats({
+              framesProcessed: 0,
+              correctionsSent: 0
+            });
+            console.log('[Socket Event] Session stats reset for new session');
+          } else if (data.client_id) {
+            // If we didn't get a session_id but got a client_id, we should manually start a session
+            console.log('[Socket Event] No session ID received, starting a new session manually');
+            startSessionOnBackend(data.client_id);
+          } else {
+            console.warn('[Socket Event] No session ID or client ID received in connected event');
+          }
+        });
 
-        // Update timing info
-        const now = Date.now();
-        const latency = lastLandmarkUpdateRef.current ? now - lastLandmarkUpdateRef.current : 0;
-        setFeedbackLatency(latency);
-        setReceivedCount(prevCount => prevCount + 1);
-        lastCorrectionTimeRef.current = now;
-      });
-      // --- END Corrections Handler ---
+        // --- Corrections Handler ---
+        socketRef.current.on('pose_corrections', (data) => {
+          // Process the corrections for drawing without triggering renders
+          if (data.corrections) {
+            // Apply smoothing to prevent flickering
+            const smoothedCorrections = smoothCorrections(data.corrections, previousCorrections);
+            previousCorrections = smoothedCorrections;
+            
+            // Update the ref with the smoothed data
+            latestCorrectionsRef.current = smoothedCorrections;
+          } else if (typeof data === 'object' && !data.predicted_workout_type && !data.predicted_muscle_group) {
+            // Apply smoothing to prevent flickering
+            const smoothedCorrections = smoothCorrections(data, previousCorrections);
+            previousCorrections = smoothedCorrections;
+            
+            // Update the ref with the smoothed data
+            latestCorrectionsRef.current = smoothedCorrections;
+          } else {
+            latestCorrectionsRef.current = {};
+          }
 
-      socketRef.current.on('error', (data) => { 
-        console.error('[Socket Event] Received server error:', data.message || data); 
-      });
+          // Update state much less frequently to prevent render flicker
+          // Use a timer-based approach instead of random to make it more predictable
+          if (!correctionsUpdateTimerRef.current) {
+            correctionsUpdateTimerRef.current = setTimeout(() => {
+              setCorrections(latestCorrectionsRef.current);
+              correctionsUpdateTimerRef.current = null;
+            }, 500); // Update UI state only every 500ms
+          }
+
+          // Update session stats - add to both the state and the pending stats ref
+          const correctionCount = data.corrections ? Object.keys(data.corrections).length : 1;
+          
+          // Update the state (this might cause re-renders)
+          setSessionStats(prev => ({
+            framesProcessed: prev.framesProcessed + 1,
+            correctionsSent: prev.correctionsSent + correctionCount
+          }));
+          
+          // Also accumulate in our pending stats reference (for auto-updates)
+          pendingStatsRef.current.framesProcessed += 1;
+          pendingStatsRef.current.correctionsSent += correctionCount;
+          
+          // Log the updated stats occasionally to verify they're increasing
+          if (Math.random() < 0.01) { // Log roughly every 100 frames
+            console.log('[Session Stats] Current stats:', {
+              sessionId,
+              framesProcessed: sessionStats.framesProcessed,
+              correctionsSent: sessionStats.correctionsSent,
+              pendingUpdates: pendingStatsRef.current
+            });
+          }
+          
+          // Check if there's a predicted workout type in the data
+          if (data.predicted_workout_type !== undefined) {
+            updateStableWorkoutPrediction(data.predicted_workout_type);
+          }
+          
+          // Check if there's a predicted muscle group in the data
+          if (data.predicted_muscle_group !== undefined) {
+            updateStableMuscleGroupPrediction(data.predicted_muscle_group);
+          }
+
+          // Update timing info
+          const now = Date.now();
+          // Check if the received data contains a timestamp from when it was sent
+          if (data.timestamp) {
+            const latency = now - data.timestamp;
+            // Update more frequently with a smaller threshold
+            if (Math.abs(latency - feedbackLatency) > 20) {
+              setFeedbackLatency(latency);
+            }
+          } else {
+            // Fallback to the old calculation
+            const latency = lastLandmarkUpdateRef.current ? now - lastLandmarkUpdateRef.current : 0;
+            if (Math.abs(latency - feedbackLatency) > 20) {
+              setFeedbackLatency(latency);
+            }
+          }
+          
+          // Use ref for count and update state less frequently
+          receivedCountRef.current += 1;
+          // Update more frequently (every other correction) but still throttle
+          if (receivedCountRef.current % 2 === 0) {
+            setReceivedCount(receivedCountRef.current);
+          }
+          
+          lastCorrectionTimeRef.current = now;
+        });
+        // --- END Corrections Handler ---
+
+        socketRef.current.on('error', (data) => { 
+          console.error('[Socket Event] Received server error:', data.message || data); 
+        });
+      } catch (error) {
+        console.error('[Socket Setup] Error initializing socket connection:', error);
+        setConnectionStatus("disconnected");
+      }
     };
     
     connectSocket();
     
+    // Send final session stats when component unmounts
     return () => { 
+      reportFinalSessionStats();
+      
       if (socketRef.current) { 
         console.log("[Socket Cleanup] Disconnecting WebSocket."); 
         socketRef.current.disconnect(); 
         socketRef.current = null; 
       } 
     };
-  }, []);
+  }, [token]); // Add token as dependency
+
+  // Function to report final session stats
+  const reportFinalSessionStats = () => {
+    if (!sessionId || !token) {
+      console.warn('[Session] Cannot report final stats: Missing session ID or token');
+      return;
+    }
+    
+    // Calculate total session duration in seconds
+    const totalDurationInSeconds = sessionStartTime ? Math.floor((Date.now() - sessionStartTime) / 1000) : 0;
+    
+    // Get the current stats directly to ensure we have the latest values
+    const currentStats = {
+      session_id: sessionId,
+      frames_processed: sessionStats.framesProcessed,
+      corrections_sent: sessionStats.correctionsSent,
+      session_duration: totalDurationInSeconds,
+      workout_type: currentWorkoutRef.current // Include the current workout type
+    };
+    
+    try {
+      console.log('[Session] Reporting final session stats:', currentStats);
+      // Report session stats to backend via REST API
+      fetch(`http://localhost:8000/api/usage/end_session/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(currentStats)
+      }).then(response => {
+        if (response.ok) {
+          console.log('[Session] Final stats reported successfully');
+          return response.json();
+        } else {
+          console.error('[Session] Failed to report final stats:', response.statusText);
+          throw new Error(`Failed to report stats: ${response.statusText}`);
+        }
+      }).then(data => {
+        console.log('[Session] Server response:', data);
+      }).catch(error => {
+        console.error('[Session] Error reporting final stats:', error);
+      });
+    } catch (e) {
+      console.error('[Session] Error reporting session stats:', e);
+    }
+  };
+
+  // Update the useEffect that handles periodic session stats reporting
+  useEffect(() => {
+    if (!sessionId || !token) {
+      console.log('[Session] Missing sessionId or token for automatic updates');
+      return;
+    }
+    
+    console.log('[Session] Setting up periodic stats reporting for session:', sessionId);
+    
+    // Initialize our pending stats tracker
+    pendingStatsRef.current = {
+      framesProcessed: sessionStats.framesProcessed,
+      correctionsSent: sessionStats.correctionsSent,
+      sessionDuration: 0
+    };
+    
+    const reportInterval = setInterval(() => {
+      const now = Date.now();
+      
+      // Check if we have new stats to report compared to last auto-update
+      const pendingStats = pendingStatsRef.current;
+      const hasNewData = (
+        pendingStats.framesProcessed > 0 || 
+        pendingStats.correctionsSent > 0
+      );
+      
+      // Calculate current duration in seconds
+      const currentDurationInSeconds = sessionStartTime ? Math.floor((now - sessionStartTime) / 1000) : 0;
+      
+      // Only send update if we have some data to report
+      if (hasNewData) {
+        console.log('[Session] Sending auto-update with stats:', {
+          session_id: sessionId,
+          frames_processed: pendingStats.framesProcessed,
+          corrections_sent: pendingStats.correctionsSent,
+          session_duration: currentDurationInSeconds,
+          workout_type: currentWorkoutRef.current,
+          time_since_last: now - lastAutoUpdateTimeRef.current
+        });
+        
+        fetch(`http://localhost:8000/api/usage/update_metrics/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            session_id: sessionId,
+            frames_processed: pendingStats.framesProcessed,
+            corrections_sent: pendingStats.correctionsSent,
+            session_duration: currentDurationInSeconds,
+            workout_type: currentWorkoutRef.current
+          })
+        })
+        .then(response => {
+          if (response.ok) {
+            // Update the UI indicator
+            const autoUpdateIndicator = document.getElementById('auto-update-indicator');
+            if (autoUpdateIndicator) {
+              autoUpdateIndicator.classList.add('pulse-success');
+              setTimeout(() => {
+                autoUpdateIndicator.classList.remove('pulse-success');
+              }, 1000);
+            }
+            
+            // Reset our pending stats accumulator
+            pendingStatsRef.current = {
+              framesProcessed: 0,
+              correctionsSent: 0,
+              sessionDuration: 0
+            };
+            
+            // Update the last auto-update time
+            lastAutoUpdateTimeRef.current = now;
+            
+            console.log('[Session] Auto-update successful');
+          } else {
+            console.error('[Session] Auto-update failed:', response.statusText);
+          }
+        })
+        .catch(error => {
+          console.error('[Session] Error in auto-update:', error);
+        });
+      } else {
+        console.log('[Session] Skipping auto-update - no new stats to report');
+      }
+    }, 10000); // Every 10 seconds
+    
+    return () => {
+      console.log('[Session] Clearing periodic stats reporting interval');
+      clearInterval(reportInterval);
+    };
+  }, [sessionId, token, sessionStartTime]); // Add sessionStartTime to dependencies
+
+  // Add a new function to manually force-update usage stats
+  const forceUpdateUsageStats = () => {
+    if (!sessionId || !token) {
+      console.warn('[Session] Cannot force update: Missing session ID or token');
+      return;
+    }
+    
+    // Calculate current duration in seconds
+    const currentDurationInSeconds = sessionStartTime ? Math.floor((Date.now() - sessionStartTime) / 1000) : 0;
+    
+    // Combine current stats with pending stats for a complete update
+    const statsToReport = {
+      session_id: sessionId,
+      frames_processed: sessionStats.framesProcessed,
+      corrections_sent: sessionStats.correctionsSent,
+      session_duration: currentDurationInSeconds,
+      workout_type: currentWorkoutRef.current
+    };
+    
+    console.log('[Session] Force updating usage stats:', statsToReport);
+    
+    fetch(`http://localhost:8000/api/usage/update_metrics/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(statsToReport)
+    })
+    .then(response => {
+      if (response.ok) {
+        console.log('[Session] Force update successful');
+        // Reset pending stats since we just sent everything
+        pendingStatsRef.current = {
+          framesProcessed: 0,
+          correctionsSent: 0,
+          sessionDuration: 0
+        };
+        // Update the last auto-update time
+        lastAutoUpdateTimeRef.current = Date.now();
+        
+        // Show a small notification
+        addNotification({
+          type: 'success',
+          message: 'Usage stats updated',
+          autoClose: 2000
+        });
+        
+        // Pulse the indicator
+        const autoUpdateIndicator = document.getElementById('auto-update-indicator');
+        if (autoUpdateIndicator) {
+          autoUpdateIndicator.classList.add('pulse-success');
+          setTimeout(() => {
+            autoUpdateIndicator.classList.remove('pulse-success');
+          }, 1000);
+        }
+      } else {
+        console.error('[Session] Force update failed:', response.statusText);
+        addNotification({
+          type: 'error',
+          message: 'Failed to update usage stats',
+          autoClose: 3000
+        });
+      }
+    })
+    .catch(error => {
+      console.error('[Session] Error in force update:', error);
+      addNotification({
+        type: 'error',
+        message: 'Network error updating stats',
+        autoClose: 3000
+      });
+    });
+  };
+
+  // Add a new debugging function for tracing the pose/drawing pipeline
+  const debugLog = (message, data = null, force = false) => {
+    // Use force for critical logs we always want to see
+    if (force || Math.random() < 0.01) { // Show ~1% of logs to avoid console spam
+      if (data) {
+        // console.log(`[Debug] ${message}`, data);
+      } else {
+        // console.log(`[Debug] ${message}`);
+      }
+    }
+  };
 
   // --- Landmark Update Function ---
   const updateLandmarks = (landmarks) => {
     if (landmarks && landmarks.length > 0) {
+        debugLog("Landmark update: Received valid landmarks", landmarks.length, true);
         setUserLandmarksForDrawing(landmarks);
         latestLandmarksRef.current = landmarks;
         lastLandmarkUpdateRef.current = Date.now();
     } else {
+        debugLog("Landmark update: No valid landmarks received", null, true);
         setUserLandmarksForDrawing(null);
         latestLandmarksRef.current = null;
     }
@@ -968,14 +1562,33 @@ const TrainingPage = () => {
     sendIntervalRef.current = setInterval(() => {
       const landmarksToSend = latestLandmarksRef.current;
       const socketIsConnected = socketRef.current?.connected;
+      
+      // Log connection status regularly for debugging
+      if (!socketRef.current) {
+        console.warn('[Data Send] Socket ref is null');
+      } else if (!socketIsConnected) {
+        console.warn('[Data Send] Socket is not connected');
+      }
+      
       if (landmarksToSend && socketIsConnected) {
         const sendTimestamp = Date.now();
         // Send both landmarks and the selected workout type
-        socketRef.current.emit('pose_data', { 
-          landmarks: landmarksToSend, 
-          timestamp: sendTimestamp,
-          selected_workout: currentWorkout
-        });
+        try {
+          socketRef.current.emit('pose_data', { 
+            landmarks: landmarksToSend, 
+            timestamp: sendTimestamp,
+            selected_workout: currentWorkout
+          });
+          
+          // Log occasional send success (every 100 frames = ~5 seconds)
+          if (Math.random() < 0.01) {
+            console.log('[Data Send] Successfully sent frame data to server');
+          }
+        } catch (error) {
+          console.error('[Data Send] Error sending data to server:', error);
+        }
+      } else if (!landmarksToSend && socketIsConnected) {
+        console.warn('[Data Send] No landmarks to send');
       }
     }, sendIntervalDelay);
     
@@ -1007,6 +1620,57 @@ const TrainingPage = () => {
     
     return () => clearInterval(checkCorrectionTimeout);
   }, [connectionStatus]);
+
+  // --- MediaPipe Results Callback ---
+  function onResults(results) {
+    const canvas = canvasRef.current;
+    if (!canvas || !webcamRef.current) { return; }
+    const ctx = canvas.getContext('2d');
+    if (!ctx) { return; }
+    
+    const videoWidth = webcamRef.current.videoWidth;
+    const videoHeight = webcamRef.current.videoHeight;
+    if (videoWidth === 0 || videoHeight === 0) { return; }
+    
+    // Only resize canvas if dimensions change to avoid flicker
+    if (canvas.width !== videoWidth) canvas.width = videoWidth;
+    if (canvas.height !== videoHeight) canvas.height = videoHeight;
+
+    // Clear entire canvas with proper settings
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (results.poseLandmarks) {
+        const landmarks = results.poseLandmarks;
+        updateLandmarks(landmarks); // Update ref and state
+
+        // --- Drawing Logic ---
+        // Enable image smoothing for better quality
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        
+        // Draw skeleton first as the base layer
+        drawUserPose(ctx, landmarks, canvas.width, canvas.height);
+
+        // Get corrections and find joints to correct
+        const currentCorrections = latestCorrectionsRef.current;
+        
+        // Only calculate joints to correct if we have valid corrections
+        if (currentCorrections && Object.keys(currentCorrections).length > 0) {
+            const jointsToCorrect = findJointsToCorrect(landmarks, currentCorrections);
+            
+            // Draw correction arrows if needed
+            if (jointsToCorrect && jointsToCorrect.length > 0) {
+                drawCorrectionArrows(ctx, landmarks, currentCorrections, jointsToCorrect, canvas.width, canvas.height);
+            }
+        }
+    } else {
+        updateLandmarks(null);
+    }
+    
+    ctx.restore();
+  }
 
   // Toggle dark mode function
   const toggleDarkMode = () => {
@@ -1050,17 +1714,25 @@ const TrainingPage = () => {
             updateLandmarks(landmarks); // Update ref and state
 
             // --- Drawing Logic ---
-            drawUserPose(ctx, landmarks, canvas.width, canvas.height); // Draw skeleton
+            // Enable image smoothing for better quality
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            
+            // Draw skeleton first as the base layer
+            drawUserPose(ctx, landmarks, canvas.width, canvas.height);
 
-            // Use the latestCorrectionsRef for drawing
+            // Get corrections and find joints to correct
             const currentCorrections = latestCorrectionsRef.current;
-            const jointsToCorrect = findJointsToCorrect(landmarks, currentCorrections);
-
-            // Only attempt to draw if there are joints needing correction
-            if (jointsToCorrect.length > 0) {
-                 drawCorrectionArrows(ctx, landmarks, currentCorrections, jointsToCorrect, canvas.width, canvas.height);
+            
+            // Only calculate joints to correct if we have valid corrections
+            if (currentCorrections && Object.keys(currentCorrections).length > 0) {
+                const jointsToCorrect = findJointsToCorrect(landmarks, currentCorrections);
+                
+                // Draw correction arrows if needed
+                if (jointsToCorrect && jointsToCorrect.length > 0) {
+                    drawCorrectionArrows(ctx, landmarks, currentCorrections, jointsToCorrect, canvas.width, canvas.height);
+                }
             }
-
         } else {
             updateLandmarks(null);
         }
@@ -1146,6 +1818,131 @@ const TrainingPage = () => {
   const toggleMuscleVisualizer = () => {
     setShowMuscleVisualizer(!showMuscleVisualizer);
   };
+
+  // Add this function to manually start a session on the backend
+  const startSessionOnBackend = (clientId) => {
+    if (!token) {
+      console.error('[Session] Cannot start session: No authentication token');
+      return;
+    }
+
+    console.log('[Session] Manually starting a new session');
+    fetch('http://localhost:8000/api/usage/start_session/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        workout_type: currentWorkout,
+        platform: 'web',
+        client_id: clientId
+      })
+    })
+    .then(response => {
+      if (response.ok) {
+        return response.json();
+      }
+      throw new Error('Failed to start session');
+    })
+    .then(data => {
+      console.log('[Session] New session started:', data.session_id);
+      setSessionId(data.session_id);
+      
+      // Reset session stats
+      setSessionStats({
+        framesProcessed: 0,
+        correctionsSent: 0
+      });
+    })
+    .catch(error => {
+      console.error('[Session] Error starting session:', error);
+    });
+  };
+
+  // Add this effect to update metrics periodically regardless of incoming data
+  useEffect(() => {
+    const updateInterval = setInterval(() => {
+      // Update UI with latest values from refs
+      setReceivedCount(receivedCountRef.current);
+      
+      // If we've had recent corrections, update the latency display
+      const now = Date.now();
+      if (lastCorrectionTimeRef.current > 0 && (now - lastCorrectionTimeRef.current < 5000)) {
+        const estimatedLatency = lastCorrectionTimeRef.current - lastLandmarkUpdateRef.current;
+        if (estimatedLatency > 0) {
+          setFeedbackLatency(estimatedLatency);
+        }
+      }
+    }, 1000); // Update every second
+    
+    return () => clearInterval(updateInterval);
+  }, []);
+
+  // Add CSS for the pulse effect
+  // We'll add a style tag in the component since this is a specific effect we need
+  useEffect(() => {
+    // Add the CSS for the pulse effect
+    const styleEl = document.createElement('style');
+    styleEl.innerHTML = `
+      .pulse-success {
+        animation: pulse-green 1s;
+        background-color: #10b981 !important;
+        opacity: 1 !important;
+      }
+
+      @keyframes pulse-green {
+        0% {
+          transform: scale(0.95);
+          box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+        }
+        
+        70% {
+          transform: scale(1.5);
+          box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+        }
+        
+        100% {
+          transform: scale(0.95);
+          box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+        }
+      }
+    `;
+    document.head.appendChild(styleEl);
+    
+    return () => {
+      document.head.removeChild(styleEl);
+    };
+  }, []);
+
+  // Add useEffect for tracking session duration
+  useEffect(() => {
+    if (!sessionId || !sessionStartTime) return;
+    
+    console.log('[Session] Starting session duration timer');
+    
+    // Clear any existing timer
+    if (sessionDurationTimerRef.current) {
+      clearInterval(sessionDurationTimerRef.current);
+    }
+    
+    // Start a timer to update the duration every second
+    sessionDurationTimerRef.current = setInterval(() => {
+      const durationInSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
+      setSessionDuration(durationInSeconds);
+      
+      // Also update the pending stats ref with the latest duration
+      pendingStatsRef.current.sessionDuration = durationInSeconds;
+    }, 1000);
+    
+    return () => {
+      console.log('[Session] Clearing session duration timer');
+      if (sessionDurationTimerRef.current) {
+        clearInterval(sessionDurationTimerRef.current);
+        sessionDurationTimerRef.current = null;
+      }
+    };
+  }, [sessionId, sessionStartTime]);
 
   // --- Render ---
   return (
@@ -1256,6 +2053,10 @@ const TrainingPage = () => {
                 feedbackLatency={feedbackLatency}
                 receivedCount={receivedCount}
                 connectionStatus={connectionStatus}
+                onForceUpdate={forceUpdateUsageStats}
+                pendingUpdates={pendingStatsRef.current ? 
+                  pendingStatsRef.current.framesProcessed + pendingStatsRef.current.correctionsSent : 0}
+                sessionDuration={sessionDuration}
               />
             </div>
           </div>

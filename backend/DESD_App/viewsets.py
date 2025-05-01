@@ -17,10 +17,13 @@ import time
 import os
 import math
 from datetime import datetime, timedelta
+from django.utils import timezone
 from dotenv import load_dotenv
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
-from django.db.models import Count
+from django.db.models import Count, Sum, Avg, Max, Min
+from .models import UsageRecord, ModelPerformanceMetric
+from .serializers import UsageRecordSerializer, ModelPerformanceMetricSerializer
 
 # Load environment variables
 load_dotenv()
@@ -719,6 +722,318 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 'overdue_total': overdue_total,
                 'total_invoices': invoices.count()
             }
+        })
+
+class UsageTrackingViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for tracking AI workout session usage.
+    Users can view their own usage records, while admins can view all records.
+    """
+    serializer_class = UsageRecordSerializer
+    
+    def get_permissions(self):
+        """
+        Allow users to view their own usage, admins can see everything
+        """
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [IsAuthenticated]
+        elif self.action in ['create', 'update', 'partial_update', 'destroy']:
+            permission_classes = [IsAuthenticated, IsAdminRole]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
+    
+    def get_queryset(self):
+        """
+        Return all records for admins, or just the user's own records
+        """
+        user = self.request.user
+        
+        # Check if user is in Admin group
+        if user.groups.filter(name='Admin').exists():
+            return UsageRecord.objects.all()
+        
+        # For non-admin users, only return their own records
+        return UsageRecord.objects.filter(user=user)
+    
+    @action(detail=False, methods=['post'])
+    def start_session(self, request):
+        """Start a new tracking session for the current user"""
+        user = request.user
+        
+        # Get optional workout type
+        workout_type = request.data.get('workout_type', 0)
+        
+        # Create a new session record
+        session = UsageRecord.objects.create(
+            user=user,
+            workout_type=workout_type,
+            subscription_plan=user.subscription.plan if hasattr(user, 'subscription') else '',
+            client_ip=self.get_client_ip(request),
+            platform=request.data.get('platform', '')
+        )
+        
+        return Response({
+            'session_id': session.session_id,
+            'started': session.session_start
+        }, status=status.HTTP_201_CREATED)
+    
+    @action(detail=False, methods=['post'])
+    def end_session(self, request):
+        """End a tracking session and calculate duration"""
+        session_id = request.data.get('session_id')
+        if not session_id:
+            return Response({'error': 'Session ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            session = UsageRecord.objects.get(session_id=session_id, user=request.user)
+            
+            # Update metrics if provided
+            frames = request.data.get('frames_processed')
+            corrections = request.data.get('corrections_sent')
+            duration = request.data.get('session_duration')
+            workout_type = request.data.get('workout_type')
+            
+            if frames is not None:
+                session.frames_processed = frames
+            
+            if corrections is not None:
+                session.corrections_sent = corrections
+            
+            # If workout_type is provided, update it
+            if workout_type is not None:
+                session.workout_type = workout_type
+                print(f"Setting final workout type to {workout_type}")
+            
+            # If duration is provided, use it directly instead of calculating
+            if duration is not None:
+                session.total_duration = duration
+                print(f"Setting final session duration to {duration} seconds")
+                
+                # Set session_end based on the provided duration
+                if session.session_start:
+                    session.session_end = session.session_start + timedelta(seconds=duration)
+                else:
+                    # If no start time, end time is now minus the duration
+                    session.session_end = datetime.now()
+                    session.session_start = session.session_end - timedelta(seconds=duration)
+            else:
+                # End the session as before
+                session.end_session()
+            
+            # Always mark as inactive
+            session.is_active = False
+            session.save()
+            
+            # Calculate billable amount
+            session.calculate_billable_amount()
+            
+            return Response({
+                'session_id': session.session_id,
+                'duration': session.total_duration,
+                'billable_amount': session.billable_amount,
+                'workout_type': session.workout_type
+            })
+            
+        except UsageRecord.DoesNotExist:
+            return Response({'error': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    @action(detail=False, methods=['post'])
+    def update_metrics(self, request):
+        """Update metrics for an active session"""
+        session_id = request.data.get('session_id')
+        if not session_id:
+            return Response({'error': 'Session ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Remove the is_active=True requirement so we can update any session
+            session = UsageRecord.objects.get(session_id=session_id, user=request.user)
+            
+            # Update metrics
+            frames = request.data.get('frames_processed')
+            corrections = request.data.get('corrections_sent')
+            duration = request.data.get('session_duration')
+            workout_type = request.data.get('workout_type')
+            
+            if frames is not None:
+                session.frames_processed = frames
+            
+            if corrections is not None:
+                session.corrections_sent = corrections
+            
+            # Also update the total_duration if provided
+            if duration is not None:
+                session.total_duration = duration
+                print(f"Updating session duration to {duration} seconds")
+                
+            # Update workout_type if provided
+            if workout_type is not None:
+                session.workout_type = workout_type
+                print(f"Updating workout type to {workout_type}")
+            
+            # Ensure we're marked as active
+            session.is_active = True
+            session.save()
+            
+            return Response({
+                'status': 'metrics updated',
+                'session_id': str(session.session_id),
+                'frames_processed': session.frames_processed,
+                'corrections_sent': session.corrections_sent,
+                'total_duration': session.total_duration,
+                'workout_type': session.workout_type,
+                'is_active': session.is_active
+            })
+            
+        except UsageRecord.DoesNotExist:
+            # If session doesn't exist, create a new one
+            try:
+                workout_type = request.data.get('workout_type', 0)
+                duration = request.data.get('session_duration', 0)
+                
+                new_session = UsageRecord.objects.create(
+                    user=request.user,
+                    frames_processed=request.data.get('frames_processed', 0),
+                    corrections_sent=request.data.get('corrections_sent', 0),
+                    total_duration=duration,
+                    workout_type=workout_type,
+                    is_active=True
+                )
+                
+                return Response({
+                    'status': 'new session created',
+                    'session_id': str(new_session.session_id),
+                    'frames_processed': new_session.frames_processed,
+                    'corrections_sent': new_session.corrections_sent,
+                    'total_duration': new_session.total_duration,
+                    'workout_type': new_session.workout_type
+                }, status=status.HTTP_201_CREATED)
+                
+            except Exception as e:
+                return Response({
+                    'error': 'Failed to create session',
+                    'detail': str(e)
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        """Get usage summary for the current user"""
+        user = request.user
+        
+        # Get date range from request
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        
+        # Base queryset for the user
+        queryset = UsageRecord.objects.filter(user=user)
+        
+        # Apply date filters if provided
+        if start_date:
+            queryset = queryset.filter(session_start__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(session_start__lte=end_date)
+        
+        # Calculate summary metrics
+        total_sessions = queryset.count()
+        total_duration = sum(record.total_duration or 0 for record in queryset)
+        total_frames = queryset.aggregate(Sum('frames_processed'))['frames_processed__sum'] or 0
+        total_corrections = queryset.aggregate(Sum('corrections_sent'))['corrections_sent__sum'] or 0
+        total_billed = queryset.aggregate(Sum('billable_amount'))['billable_amount__sum'] or 0
+        
+        # Get active sessions
+        active_sessions = queryset.filter(is_active=True).count()
+        
+        return Response({
+            'total_sessions': total_sessions,
+            'active_sessions': active_sessions,
+            'total_duration_seconds': total_duration,
+            'total_frames_processed': total_frames,
+            'total_corrections_received': total_corrections,
+            'total_billed_amount': total_billed
+        })
+    
+    def get_client_ip(self, request):
+        """Get client IP address from request"""
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip
+
+class ModelPerformanceViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for model performance metrics.
+    Only accessible by Admins and ML Engineers.
+    """
+    serializer_class = ModelPerformanceMetricSerializer
+    permission_classes = [IsAuthenticated, IsAdminRole | IsMachineLearningExpert]
+    queryset = ModelPerformanceMetric.objects.all()
+    
+    @action(detail=False, methods=['post'])
+    def record_metrics(self, request):
+        """Record model performance metrics"""
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        """Get summary of model performance metrics"""
+        # Get date range from request
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        workout_type = request.query_params.get('workout_type')
+        
+        # Base queryset
+        queryset = self.get_queryset()
+        
+        # Apply filters if provided
+        if start_date:
+            queryset = queryset.filter(timestamp__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(timestamp__lte=end_date)
+        if workout_type:
+            queryset = queryset.filter(workout_type=workout_type)
+        
+        # Calculate summary statistics
+        summary = queryset.aggregate(
+            avg_confidence=Avg('avg_prediction_confidence'),
+            avg_latency=Avg('avg_response_latency'),
+            avg_frame_rate=Avg('frame_processing_rate'),
+            avg_stability=Avg('stable_prediction_rate'),
+            max_latency=Max('avg_response_latency'),
+            min_latency=Min('avg_response_latency'),
+            total_entries=Count('id')
+        )
+        
+        # Get performance by workout type
+        workout_performance = list(queryset.values('workout_type')
+            .annotate(
+                avg_confidence=Avg('avg_prediction_confidence'),
+                avg_latency=Avg('avg_response_latency'),
+                count=Count('id')
+            )
+            .order_by('workout_type'))
+        
+        # Get performance trend over time (daily averages)
+        from django.db.models.functions import TruncDay
+        trend = list(queryset
+            .annotate(day=TruncDay('timestamp'))
+            .values('day')
+            .annotate(
+                avg_confidence=Avg('avg_prediction_confidence'),
+                avg_latency=Avg('avg_response_latency'),
+                count=Count('id')
+            )
+            .order_by('day'))
+        
+        return Response({
+            'summary': summary,
+            'by_workout_type': workout_performance,
+            'trend': trend
         })
 
 

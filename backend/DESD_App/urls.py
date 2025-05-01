@@ -11,6 +11,8 @@ router.register(r'role_info', RoleInfoViewSet, basename='role_info')
 router.register(r'billing', BillingViewSet, basename='billing')
 router.register(r'invoices', InvoiceViewSet, basename='invoice')  # Register InvoiceViewSet
 router.register(r'subscriptions', SubscriptionViewSet, basename='subscription')  # Register SubscriptionViewSet
+router.register(r'usage', UsageTrackingViewSet, basename='usage')
+router.register(r'model-performance', ModelPerformanceViewSet, basename='model-performance')
 
 # urlpatterns = router.urls
 

@@ -200,6 +200,71 @@ class InvoiceSerializer(serializers.ModelSerializer):
             return 0
         return (today - obj.due_date).days
 
+class UsageRecordSerializer(serializers.ModelSerializer):
+    """Serializer for usage tracking records"""
+    username = serializers.SerializerMethodField()
+    duration_formatted = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = UsageRecord
+        fields = [
+            'id', 'user', 'username', 'session_id', 'session_start', 'session_end', 
+            'total_duration', 'duration_formatted', 'frames_processed', 'corrections_sent', 
+            'workout_type', 'billable_amount', 'subscription_plan', 'is_active'
+        ]
+        read_only_fields = ['id', 'username', 'duration_formatted']
+    
+    def get_username(self, obj):
+        return obj.user.username if obj.user else None
+    
+    def get_duration_formatted(self, obj):
+        """Return human-readable duration"""
+        if not obj.total_duration:
+            return "Active" if obj.is_active else "Unknown"
+        
+        minutes, seconds = divmod(obj.total_duration, 60)
+        hours, minutes = divmod(minutes, 60)
+        
+        if hours > 0:
+            return f"{int(hours)}h {int(minutes)}m {int(seconds)}s"
+        elif minutes > 0:
+            return f"{int(minutes)}m {int(seconds)}s"
+        else:
+            return f"{int(seconds)}s"
+
+class ModelPerformanceMetricSerializer(serializers.ModelSerializer):
+    """Serializer for model performance metrics"""
+    workout_name = serializers.SerializerMethodField()
+    latency_rating = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ModelPerformanceMetric
+        fields = '__all__'
+    
+    def get_workout_name(self, obj):
+        """Return the workout name based on the workout type"""
+        workout_map = {
+            0: "Barbell Bicep Curl", 1: "Bench Press", 2: "Chest Fly Machine",
+            3: "Deadlift", 4: "Decline Bench Press", 5: "Hammer Curl",
+            6: "Hip Thrust", 7: "Incline Bench Press", 8: "Lat Pulldown",
+            9: "Lateral Raises", 10: "Leg Extensions", 11: "Leg Raises",
+            12: "Plank", 13: "Pull Up", 14: "Push Ups", 15: "Romanian Deadlift",
+            16: "Russian Twist", 17: "Shoulder Press", 18: "Squat",
+            19: "T Bar Row", 20: "Tricep Dips", 21: "Tricep Pushdown"
+        }
+        return workout_map.get(obj.workout_type, "Unknown")
+    
+    def get_latency_rating(self, obj):
+        """Return a rating for the latency performance"""
+        if obj.avg_response_latency < 50:
+            return "Excellent"
+        elif obj.avg_response_latency < 100:
+            return "Good"
+        elif obj.avg_response_latency < 200:
+            return "Average"
+        else:
+            return "Poor"
+
 
 
 
