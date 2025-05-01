@@ -421,27 +421,44 @@ def report_performance_metrics(client_id, is_final=False):
         "frame_processing_rate": avg_fps
     }
     
-    # Only send to backend if we have an admin/ML user
+    # Only send to backend if we have a user ID and token
     user_id = client_sessions.get(client_id, {}).get('user_id')
     token = client_sessions.get(client_id, {}).get('token')
     
     if user_id and token:
         try:
-            # Check if user is admin or ML expert before sending
-            response = requests.post(
-                f"{PERFORMANCE_ENDPOINT}record_metrics/",
-                json=metric_data,
+            # First check if the user has admin or ML expert role before trying to send metrics
+            # This avoids users getting 403 errors which could affect their experience
+            role_check_response = requests.get(
+                "http://localhost:8000/api/role-info/",
                 headers={"Authorization": f"Bearer {token}"},
                 timeout=5
             )
             
-            if response.status_code == 201:
-                print(f"Performance metrics recorded for workout type {workout_type}")
-            elif response.status_code == 403:
-                # User doesn't have permission, no need to try again
-                pass
+            if role_check_response.status_code == 200:
+                role_data = role_check_response.json()
+                is_admin = role_data.get('is_admin', False)
+                is_ai_engineer = role_data.get('is_ai_engineer', False)
+                
+                # Only proceed if user is admin or AI engineer
+                if is_admin or is_ai_engineer:
+                    response = requests.post(
+                        f"{PERFORMANCE_ENDPOINT}record_metrics/",
+                        json=metric_data,
+                        headers={"Authorization": f"Bearer {token}"},
+                        timeout=5
+                    )
+                    
+                    if response.status_code == 201:
+                        print(f"Performance metrics recorded for workout type {workout_type}")
+                    else:
+                        print(f"Failed to record performance metrics: {response.text}")
+                else:
+                    # Debug output but don't attempt to record for non-admin/non-ML users
+                    if is_final:
+                        print(f"Skipping performance metrics record - user {user_id} is not admin or AI engineer")
             else:
-                print(f"Failed to record performance metrics: {response.text}")
+                print(f"Couldn't check user role: {role_check_response.text}")
         except Exception as e:
             print(f"Error recording performance metrics: {str(e)}")
     

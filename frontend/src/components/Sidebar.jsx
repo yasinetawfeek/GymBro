@@ -25,6 +25,7 @@ const Sidebar = ({ isMenuOpen, userRole, activePage, setActivePage, setIsMenuOpe
       { id: 'billingActivity', label: 'Billing Activity', icon: BarChart },
       { id: 'stats', label: 'Stats', icon: ActivitySquare },
       { id: 'analytics', label: 'Analytics', icon: PieChart },
+      { id: 'performance', label: 'Model Performance', icon: TrendingUp },
       { id: 'models', label: 'ML Models', icon: Brain },
       { id: 'settings', label: 'System Settings', icon: Settings }
     ],
