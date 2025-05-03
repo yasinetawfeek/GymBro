@@ -1,4 +1,3 @@
-
 import os
 import django
 
@@ -15,6 +14,9 @@ django.setup()
 from django.contrib.auth.models import User
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
+from DESD_App.models import BillingRecord
+from datetime import datetime, timedelta
+import random
 
 
 """
@@ -26,8 +28,8 @@ Create Groups
 """
 
 
-query = User.objects.all()
-query.delete()
+# query = User.objects.all()
+# query.delete()
 
 content_type = ContentType.objects.get(app_label='auth', model='user')
 
@@ -94,3 +96,38 @@ permissions = ai_engineer_group.permissions.all()
 # Print the permissions
 for permission in permissions:
     print(f"Permission: {permission.codename} - {permission.name}")
+    
+# Generate billing data for testing
+print("Generating billing data for testing...")
+
+# Delete existing billing records
+BillingRecord.objects.all().delete()
+
+# Get all customer users
+customer_users = User.objects.filter(groups=customer_group)
+subscription_types = ['free', 'basic', 'premium', 'enterprise']
+status_types = ['pending', 'paid', 'overdue', 'cancelled']
+
+# Generate random billing data for the past year
+today = datetime.now().date()
+for user in customer_users:
+    # Generate between 3-10 billing records per user
+    for i in range(random.randint(3, 10)):
+        # Random date in the past year
+        billing_date = today - timedelta(days=random.randint(1, 365))
+        due_date = billing_date + timedelta(days=30)
+        
+        # Create billing record
+        BillingRecord.objects.create(
+            user=user,
+            amount=random.uniform(10.0, 500.0),
+            subscription_type=random.choice(subscription_types),
+            billing_date=billing_date,
+            due_date=due_date,
+            status=random.choice(status_types),
+            description=f"Monthly subscription for {user.username}",
+            api_calls=random.randint(100, 10000),
+            data_usage=random.uniform(50.0, 2000.0)
+        )
+
+print(f"Created {BillingRecord.objects.count()} billing records for testing")

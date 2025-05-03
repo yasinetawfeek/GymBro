@@ -25,6 +25,8 @@ import time
 from datetime import datetime # Import datetime for formatted timestamp
 from sklearn.preprocessing import StandardScaler # Added for feature scaling
 from collections import deque # For sequence buffer management
+import requests
+import uuid
 
 # --- Constants ---
 # Body keypoints indices from MediaPipe BlazePose (the key joints we're tracking)
@@ -157,6 +159,312 @@ client_pose_buffers = {}  # Dictionary to store pose buffers for each client
 client_workout_predictions = {}  # Store recent workout predictions for smoothing
 client_muscle_predictions = {}  # Store recent muscle group predictions for smoothing
 prediction_smoothing_window = 5  # Number of predictions to average for smoothing
+
+# Global tracking dictionaries
+client_sessions = {}
+performance_metrics = {}
+model_version = "1.0.0"  # Update this when you deploy new models
+
+# Initialize API endpoint URLs
+BACKEND_BASE_URL = os.environ.get('BACKEND_URL', 'http://localhost:8000')
+USAGE_ENDPOINT = f"{BACKEND_BASE_URL}/api/usage/"
+PERFORMANCE_ENDPOINT = f"{BACKEND_BASE_URL}/api/model-performance/"
+
+# Helper function to verify user token
+def verify_token(token):
+    """Verify user token with Django backend"""
+    try:
+        response = requests.post(
+            f"{BACKEND_BASE_URL}/api/token/verify/", 
+            json={"token": token},
+            headers={"Content-Type": "application/json"},
+            timeout=5
+        )
+        if response.status_code == 200:
+            return response.json()
+        return None
+    except Exception as e:
+        print(f"Error verifying token: {str(e)}")
+        return None
+
+# Initialize session tracking for a new client
+def initialize_session_tracking(client_id, user_id=None, token=None, workout_type=0):
+    """Initialize session tracking for a new client"""
+    client_sessions[client_id] = {
+        'user_id': user_id,
+        'token': token,
+        'session_id': str(uuid.uuid4()),
+        'start_time': time.time(),
+        'is_authenticated': user_id is not None,
+        'frames_processed': 0,
+        'corrections_sent': 0,
+        'last_activity': time.time(),
+        'workout_type': workout_type,
+        'session_recorded': False
+    }
+    
+    # Initialize performance metrics
+    performance_metrics[client_id] = {
+        'confidence_values': [],
+        'correction_magnitudes': [],
+        'response_times': [],
+        'processing_times': [],
+        'first_correction_time': None,
+        'frames_per_second': [],
+        'prediction_changes': 0,
+        'last_prediction': None,
+        'prediction_counts': {},
+        'frame_count': 0,
+        'start_time': time.time()
+    }
+    
+    # If user is authenticated, start a session in the backend
+    if user_id and token:
+        try:
+            response = requests.post(
+                f"{USAGE_ENDPOINT}start_session/",
+                json={"workout_type": workout_type, "platform": "web"},
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=5
+            )
+            if response.status_code == 201:
+                data = response.json()
+                client_sessions[client_id]['session_id'] = data['session_id']
+                print(f"Session started in backend: {data['session_id']}")
+            else:
+                print(f"Failed to start session: {response.text}")
+        except Exception as e:
+            print(f"Error starting session: {str(e)}")
+
+# Update client session data
+def update_session_data(client_id, frames=1, corrections=1, workout_type=None):
+    """Update session tracking data"""
+    if client_id in client_sessions:
+        client_sessions[client_id]['frames_processed'] += frames
+        client_sessions[client_id]['corrections_sent'] += corrections
+        client_sessions[client_id]['last_activity'] = time.time()
+        
+        if workout_type is not None:
+            client_sessions[client_id]['workout_type'] = workout_type
+        
+        # Periodically update metrics in the backend
+        if (client_sessions[client_id]['corrections_sent'] % 50 == 0 and 
+            client_sessions[client_id]['is_authenticated']):
+            report_session_metrics(client_id)
+
+# Update performance metrics
+def update_performance_metrics(client_id, confidence=None, correction_magnitude=None, 
+                              response_time=None, processing_time=None, predicted_type=None):
+    """Update performance metrics for the client session"""
+    if client_id not in performance_metrics:
+        return
+    
+    metrics = performance_metrics[client_id]
+    
+    # Update frame count
+    metrics['frame_count'] += 1
+    
+    # Calculate frames per second
+    elapsed = time.time() - metrics['start_time']
+    if elapsed > 0:
+        fps = metrics['frame_count'] / elapsed
+        metrics['frames_per_second'].append(fps)
+    
+    # Track confidence
+    if confidence is not None:
+        metrics['confidence_values'].append(confidence)
+    
+    # Track correction magnitude
+    if correction_magnitude is not None:
+        metrics['correction_magnitudes'].append(correction_magnitude)
+    
+    # Track response time
+    if response_time is not None:
+        metrics['response_times'].append(response_time)
+    
+    # Track processing time
+    if processing_time is not None:
+        metrics['processing_times'].append(processing_time)
+    
+    # Track time to first correction
+    if metrics['first_correction_time'] is None and correction_magnitude is not None:
+        metrics['first_correction_time'] = time.time() - metrics['start_time']
+    
+    # Track prediction stability
+    if predicted_type is not None:
+        # Count occurrences of each prediction
+        metrics['prediction_counts'][predicted_type] = metrics['prediction_counts'].get(predicted_type, 0) + 1
+        
+        # Check for prediction changes
+        if metrics['last_prediction'] is not None and metrics['last_prediction'] != predicted_type:
+            metrics['prediction_changes'] += 1
+        
+        metrics['last_prediction'] = predicted_type
+    
+    # Periodically report performance metrics
+    if metrics['frame_count'] % 1000 == 0:
+        report_performance_metrics(client_id)
+
+# Report session metrics to the backend
+def report_session_metrics(client_id):
+    """Report current session metrics to Django backend"""
+    if client_id not in client_sessions or not client_sessions[client_id]['is_authenticated']:
+        return
+    
+    session = client_sessions[client_id]
+    token = session['token']
+    
+    try:
+        response = requests.post(
+            f"{USAGE_ENDPOINT}update_metrics/",
+            json={
+                "session_id": session['session_id'],
+                "frames_processed": session['frames_processed'],
+                "corrections_sent": session['corrections_sent']
+            },
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=5
+        )
+        
+        if response.status_code != 200:
+            print(f"Failed to update metrics: {response.text}")
+    except Exception as e:
+        print(f"Error updating metrics: {str(e)}")
+
+# End client session and report final metrics
+def end_client_session(client_id):
+    """End client session and report final metrics"""
+    if client_id not in client_sessions:
+        return
+    
+    session = client_sessions[client_id]
+    
+    # Only report to backend if authenticated
+    if session['is_authenticated'] and not session['session_recorded']:
+        token = session['token']
+        
+        try:
+            response = requests.post(
+                f"{USAGE_ENDPOINT}end_session/",
+                json={
+                    "session_id": session['session_id'],
+                    "frames_processed": session['frames_processed'],
+                    "corrections_sent": session['corrections_sent']
+                },
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=5
+            )
+            
+            if response.status_code == 200:
+                session['session_recorded'] = True
+                print(f"Session ended and recorded: {session['session_id']}")
+            else:
+                print(f"Failed to end session: {response.text}")
+        except Exception as e:
+            print(f"Error ending session: {str(e)}")
+    
+    # Report performance metrics before cleanup
+    if client_id in performance_metrics:
+        report_performance_metrics(client_id, is_final=True)
+        del performance_metrics[client_id]
+    
+    # Clean up session data
+    del client_sessions[client_id]
+
+# Calculate and report performance metrics
+def report_performance_metrics(client_id, is_final=False):
+    """Calculate and report performance metrics to the backend"""
+    if client_id not in performance_metrics:
+        return
+    
+    metrics = performance_metrics[client_id]
+    
+    # Skip if not enough data
+    if len(metrics['confidence_values']) < 10:
+        return
+    
+    # Calculate average metrics
+    avg_confidence = sum(metrics['confidence_values']) / len(metrics['confidence_values']) if metrics['confidence_values'] else 0
+    min_confidence = min(metrics['confidence_values']) if metrics['confidence_values'] else 0
+    max_confidence = max(metrics['confidence_values']) if metrics['confidence_values'] else 0
+    
+    avg_correction = sum(metrics['correction_magnitudes']) / len(metrics['correction_magnitudes']) if metrics['correction_magnitudes'] else 0
+    
+    avg_response = sum(metrics['response_times']) / len(metrics['response_times']) if metrics['response_times'] else 0
+    avg_processing = sum(metrics['processing_times']) / len(metrics['processing_times']) if metrics['processing_times'] else 0
+    
+    # Calculate frames per second
+    avg_fps = sum(metrics['frames_per_second']) / len(metrics['frames_per_second']) if metrics['frames_per_second'] else 0
+    
+    # Calculate stability rate
+    total_predictions = sum(metrics['prediction_counts'].values())
+    stability_rate = 0
+    if total_predictions > 0:
+        # Calculate what percentage of frames didn't cause a prediction change
+        stability_rate = 1.0 - (metrics['prediction_changes'] / total_predictions)
+    
+    # Get the workout type from the session
+    workout_type = client_sessions.get(client_id, {}).get('workout_type', 0)
+    
+    # Prepare metric data
+    metric_data = {
+        "model_version": model_version,
+        "workout_type": workout_type,
+        "avg_prediction_confidence": avg_confidence,
+        "min_prediction_confidence": min_confidence,
+        "max_prediction_confidence": max_confidence,
+        "correction_magnitude_avg": avg_correction,
+        "stable_prediction_rate": stability_rate,
+        "avg_response_latency": int(avg_response),
+        "processing_time_per_frame": int(avg_processing),
+        "time_to_first_correction": int(metrics['first_correction_time'] * 1000) if metrics['first_correction_time'] else 0,
+        "frame_processing_rate": avg_fps
+    }
+    
+    # Only send to backend if we have a user ID and token
+    user_id = client_sessions.get(client_id, {}).get('user_id')
+    token = client_sessions.get(client_id, {}).get('token')
+    
+    if user_id and token:
+        try:
+            # First check if the user has admin or ML expert role before trying to send metrics
+            # This avoids users getting 403 errors which could affect their experience
+            role_check_response = requests.get(
+                "http://localhost:8000/api/role-info/",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=5
+            )
+            
+            if role_check_response.status_code == 200:
+                role_data = role_check_response.json()
+                is_admin = role_data.get('is_admin', False)
+                is_ai_engineer = role_data.get('is_ai_engineer', False)
+                
+                # Only proceed if user is admin or AI engineer
+                if is_admin or is_ai_engineer:
+                    response = requests.post(
+                        f"{PERFORMANCE_ENDPOINT}record_metrics/",
+                        json=metric_data,
+                        headers={"Authorization": f"Bearer {token}"},
+                        timeout=5
+                    )
+                    
+                    if response.status_code == 201:
+                        print(f"Performance metrics recorded for workout type {workout_type}")
+                    else:
+                        print(f"Failed to record performance metrics: {response.text}")
+                else:
+                    # Debug output but don't attempt to record for non-admin/non-ML users
+                    if is_final:
+                        print(f"Skipping performance metrics record - user {user_id} is not admin or AI engineer")
+            else:
+                print(f"Couldn't check user role: {role_check_response.text}")
+        except Exception as e:
+            print(f"Error recording performance metrics: {str(e)}")
+    
+    # If this is the final report, clear metrics
+    if is_final:
+        metrics.clear()
 
 # --- Model Loading ---
 def find_file(filename, search_paths):
@@ -369,8 +677,32 @@ def get_pose_corrections(landmarks, workout_type=0):
 
     try:
         inference_start = time.time()
+        
+        # Make sure landmarks is a numpy array with 36 elements
+        if not isinstance(landmarks, np.ndarray):
+            try:
+                landmarks = np.array(landmarks, dtype=np.float32)
+            except:
+                print("Error converting landmarks to numpy array")
+                return np.zeros(36)
+        
+        # Ensure landmarks has the right shape (36,) for the model
+        if landmarks.size != 36:
+            print(f"Incorrect landmarks size: {landmarks.size} (expected 36)")
+            return np.zeros(36)
+            
         # Prepare input data (workout type + landmarks)
-        input_data = np.append(workout_type, landmarks) # workout_type is the FIRST element
+        # Ensure workout_type is a number
+        if not isinstance(workout_type, (int, float)):
+            try:
+                workout_type = int(workout_type)
+            except:
+                workout_type = 0
+                
+        # Combine workout type with landmarks - workout_type is the FIRST element
+        input_data = np.append(workout_type, landmarks)
+        
+        # Convert to tensor and reshape for model
         input_tensor = torch.tensor(input_data, dtype=torch.float32).unsqueeze(0).to(device)
 
         # Perform inference
@@ -399,7 +731,7 @@ def predict_workout_from_sequence(client_id, current_features):
     
     Args:
         client_id: ID of the client
-        current_features: Current frame features (36 values)
+        current_features: Current frame features (1x36 or 36 values)
         
     Returns:
         predicted_workout_type: Integer workout type
@@ -419,8 +751,27 @@ def predict_workout_from_sequence(client_id, current_features):
             client_pose_buffers[client_id] = deque(maxlen=SEQUENCE_LENGTH)
             client_workout_predictions[client_id] = deque(maxlen=prediction_smoothing_window)
         
+        # Ensure current_features is properly shaped for StandardScaler
+        if isinstance(current_features, np.ndarray):
+            # Make sure it's 2D for StandardScaler
+            if current_features.ndim == 1:
+                # If it's 1D (36,), reshape to (1, 36)
+                features_to_scale = current_features.reshape(1, -1)
+            else:
+                # Already 2D, use as is
+                features_to_scale = current_features
+        else:
+            # Try to convert to numpy array if it's a list or other type
+            try:
+                features_to_scale = np.array(current_features, dtype=np.float32).reshape(1, -1)
+            except:
+                print(f"Error reshaping features in predict_workout_from_sequence: {type(current_features)}")
+                # Add default to prediction history
+                client_workout_predictions[client_id].append(workout_type)
+                return workout_type, "plank (feature error)"
+        
         # Scale the current frame features
-        scaled_features = feature_scaler.transform(current_features.reshape(1, -1))[0]
+        scaled_features = feature_scaler.transform(features_to_scale)[0]
         
         # Add to buffer
         client_pose_buffers[client_id].append(scaled_features)
@@ -556,8 +907,21 @@ def predict_muscle_group_from_sequence(client_id, current_features, workout_type
     # Fall back to muscle group classifier if available
     if muscle_group_classifier:
         try:
-            # Use current features for prediction
-            features_for_muscle = current_features.reshape(1, -1)
+            # Ensure current_features is properly shaped
+            if isinstance(current_features, np.ndarray):
+                # Make sure it's 2D for classifier
+                if current_features.ndim == 1:
+                    features_for_muscle = current_features.reshape(1, -1)
+                else:
+                    # Already 2D, use as is
+                    features_for_muscle = current_features
+            else:
+                try:
+                    # Try to convert to numpy array
+                    features_for_muscle = np.array(current_features, dtype=np.float32).reshape(1, -1)
+                except:
+                    print(f"Error reshaping features in predict_muscle_group: {type(current_features)}")
+                    return 0, "none (feature error)"
             
             # Predict muscle group
             predicted_muscle_label = muscle_group_classifier.predict(features_for_muscle)[0]
@@ -602,142 +966,173 @@ last_processed_time = {} # Store last *processed* request time per client
 # --- WebSocket Event Handlers ---
 @socketio.on('connect')
 def handle_connect():
-    global connected_clients
-    connected_clients += 1
+    """Handle new client connection"""
     client_id = request.sid
-    last_processed_time[client_id] = 0 # Initialize last processed time
-    print(f'Client connected ({client_id}). Total clients: {connected_clients}')
-    emit('connected', {'status': 'connected'}) # Confirm connection
+    print(f"Client connected: {client_id}")
+    
+    # Check if token was provided
+    token = request.args.get('token')
+    user_id = None
+    
+    if token:
+        # Verify token with backend
+        user_data = verify_token(token)
+        if user_data:
+            user_id = user_data.get('user_id')
+            print(f"Authenticated connection from user {user_id}")
+    
+    # Initialize session tracking
+    initialize_session_tracking(client_id, user_id, token)
+    
+    # Send confirmation
+    emit('connected', {'client_id': client_id, 'authenticated': user_id is not None})
+    
+    return client_id
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    global connected_clients
+    """Handle client disconnection"""
     client_id = request.sid
-    connected_clients -= 1
+    print(f"Client disconnected: {client_id}")
     
-    # Clean up client-specific data
-    if client_id in last_processed_time:
-        del last_processed_time[client_id]
-    if client_id in client_pose_buffers:
-        del client_pose_buffers[client_id]
-    if client_id in client_workout_predictions:
-        del client_workout_predictions[client_id]
-    if client_id in client_muscle_predictions:
-        del client_muscle_predictions[client_id]
-        
-    print(f'Client disconnected ({client_id}). Total clients: {connected_clients}')
+    # End tracking session
+    end_client_session(client_id)
 
 @socketio.on('pose_data')
 def handle_pose_data(data):
-    """Handles incoming pose data, predicts workout, performs inference, and emits corrections."""
+    """Handle incoming pose data and calculate corrections"""
+    start_time = time.time()
     client_id = request.sid
-    now = time.time()
-    # receive_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3] # Optional: for detailed logging
-
-    # Check time since last *processed* request for logging long gaps
-    # if client_id in last_processed_time and last_processed_time[client_id] != 0:
-    #     time_since_last_processed = now - last_processed_time[client_id]
-    #     if time_since_last_processed > 1.0:
-    #         print(f"Long gap between *processed* requests for client {client_id}: {time_since_last_processed:.2f}s")
-
+    
     try:
-        process_start = time.time()
+        # Extract landmarks from request
         landmarks = data.get('landmarks', [])
-        # Get selected workout from frontend if provided, otherwise default to None
-        selected_workout = data.get('selected_workout')
+        timestamp = data.get('timestamp', int(time.time() * 1000))
         
-        if not landmarks:
-            print(f"Warning: Received empty landmarks list from {client_id}.")
-            return
-
-        # --- Landmark Processing (Extract relevant coordinates) ---
-        flat_landmarks = []
-        for idx in BODY_KEYPOINTS_INDICES:
-            if idx < len(landmarks) and landmarks[idx] is not None and isinstance(landmarks[idx], dict):
-                landmark = landmarks[idx]
-                flat_landmarks.extend([
-                    landmark.get('x', 0.0), landmark.get('y', 0.0), landmark.get('z', 0.0)
-                ])
-            else:
-                # Handle missing, None, or incorrect type landmarks
-                flat_landmarks.extend([0.0, 0.0, 0.0])
-
-        # Ensure exactly 36 values
-        if len(flat_landmarks) != FLAT_LANDMARK_SIZE:
-            print(f"Warning: Landmark processing for client {client_id} resulted in {len(flat_landmarks)} values, expected {FLAT_LANDMARK_SIZE}. Padding/truncating.")
-            flat_landmarks = (flat_landmarks + [0.0]*FLAT_LANDMARK_SIZE)[:FLAT_LANDMARK_SIZE]
-
-        flat_landmarks_np = np.array(flat_landmarks, dtype=float)
-
-        # --- Predict Workout Type (using workout buffer/scaler) ---
-        workout_type_index, predicted_workout_name = predict_workout_from_sequence(client_id, flat_landmarks_np)
-
-        # --- Predict Muscle Group ---
-        muscle_group_index, predicted_muscle_group_name = predict_muscle_group_from_sequence(
-            client_id, flat_landmarks_np, workout_type_index)
-
-        # --- Get Pose Corrections (using correction buffer/scaler) ---
-        # Use the selected workout if provided, otherwise use the predicted one
-        correction_workout_type = selected_workout if selected_workout is not None else workout_type_index
-        corrections_array = get_pose_corrections(flat_landmarks_np, correction_workout_type)
-
-        # If throttled or buffer not ready (returns None or Zeros), stop processing this message
-        if corrections_array is None:
-            # print(f"Correction throttled for {client_id}") # Optional debug
-            return
-        if np.all(corrections_array == 0):
-             # Buffer might not be full, or model isn't loaded - don't emit zero corrections unless intended
-             # print(f"Zero corrections returned for {client_id}, likely buffer not full or model issue.") # Optional debug
-             # We might still want to emit workout/muscle group info even if corrections are zero
-             pass # Continue to emit, but corrections will be zero
-
-        # Update last processed time *only* when inference was attempted (even if buffer wasn't full)
-        last_processed_time[client_id] = now
-
-        # --- Prepare Correction Data for Frontend ---
-        correction_data = {}
-        for i, original_landmark_idx in enumerate(BODY_KEYPOINTS_INDICES):
-            base_idx = i * LANDMARK_DIM
-            if (base_idx + LANDMARK_DIM -1) < len(corrections_array):
-                x_corr = float(corrections_array[base_idx]) if np.isfinite(corrections_array[base_idx]) else 0.0
-                y_corr = float(corrections_array[base_idx+1]) if np.isfinite(corrections_array[base_idx+1]) else 0.0
-                z_corr = float(corrections_array[base_idx+2]) if np.isfinite(corrections_array[base_idx+2]) else 0.0
-                correction_data[str(original_landmark_idx)] = {'x': x_corr, 'y': y_corr, 'z': z_corr}
-            else:
-                print(f"Warning: Index out of bounds when formatting corrections for joint {original_landmark_idx}")
-                correction_data[str(original_landmark_idx)] = {'x': 0.0, 'y': 0.0, 'z': 0.0}
-
-        # Add predicted workout type and muscle group to correction data
-        correction_data['predicted_workout_type'] = workout_type_index
-        correction_data['predicted_muscle_group'] = muscle_group_index
-        # Optionally add names for debugging/display
-        correction_data['predicted_workout_name'] = predicted_workout_name
-        correction_data['predicted_muscle_group_name'] = predicted_muscle_group_name
-
-        # Add sequence info for debugging
-        correction_data['correction_sequence_len'] = len(client_pose_buffers.get(client_id, []))
-        correction_data['target_correction_sequence_len'] = SEQUENCE_LENGTH
-        correction_data['workout_sequence_len'] = len(client_pose_buffers.get(client_id, []))
-        correction_data['target_workout_sequence_len'] = workout_classifier_config.get('sequence_length', SEQUENCE_LENGTH)
-
-        # --- Emitting ---
-        # emit_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3] # Optional
-        emit('pose_corrections', correction_data)
-
-        # Log processing time if slow
-        process_time = time.time() - process_start
-        if process_time > 0.2:
-            print(f"Slow processing cycle for client {client_id}: {process_time:.3f}s (Workout: {predicted_workout_name}, Muscle: {predicted_muscle_group_name})")
-
-    except Exception as e:
-        print(f"Error processing pose data for client {client_id}: {e}")
-        import traceback
-        traceback.print_exc() # Print full traceback for debugging
+        # Get selected workout type from request
+        selected_workout = data.get('selected_workout', 0)
+        
+        # Update workout type in session tracking
+        if client_id in client_sessions:
+            client_sessions[client_id]['workout_type'] = selected_workout
+        
+        # Convert landmarks to numpy array for processing
+        landmarks_flat = []
+        if landmarks and isinstance(landmarks, list):
+            # Extract only the key landmarks we need (filter out irrelevant ones)
+            try:
+                # Convert landmarks to flat array format that the model expects
+                for idx in BODY_KEYPOINTS_INDICES:
+                    if idx < len(landmarks):
+                        landmark = landmarks[idx]
+                        if isinstance(landmark, dict):
+                            landmarks_flat.extend([
+                                landmark.get('x', 0), 
+                                landmark.get('y', 0), 
+                                landmark.get('z', 0)
+                            ])
+                    else:
+                        # Add zeros if landmark is missing
+                        landmarks_flat.extend([0, 0, 0])
+                
+                # Ensure we have exactly 36 values
+                if len(landmarks_flat) != 36:
+                    # Pad or truncate to 36 values
+                    if len(landmarks_flat) < 36:
+                        landmarks_flat.extend([0] * (36 - len(landmarks_flat)))
+                    else:
+                        landmarks_flat = landmarks_flat[:36]
+                
+                # Convert to numpy array for processing
+                landmarks_array = np.array(landmarks_flat, dtype=np.float32)
+            except Exception as e:
+                print(f"Error processing landmarks: {e}")
+                landmarks_array = np.zeros(36, dtype=np.float32)
+        else:
+            # Default to zeros if landmarks are invalid
+            landmarks_array = np.zeros(36, dtype=np.float32)
+        
+        # Calculate average confidence for this frame
+        avg_confidence = 0
+        if landmarks:
+            confidences = [lm.get('visibility', 0) for lm in landmarks if isinstance(lm, dict) and 'visibility' in lm]
+            if confidences:
+                avg_confidence = sum(confidences) / len(confidences)
+        
+        # Get predicted workout type and muscle group from model
         try:
-            emit('error', {'message': f'Backend error processing pose data: {str(e)}'})
-        except Exception as emit_error:
-            print(f"Error emitting error message to client {client_id}: {emit_error}")
-
+            predicted_workout, predicted_workout_name = predict_workout_from_sequence(client_id, landmarks_array.reshape(1, -1))
+            predicted_muscle_group, predicted_muscle_group_name = predict_muscle_group_from_sequence(client_id, landmarks_array.reshape(1, -1), selected_workout)
+        except Exception as e:
+            print(f"Error during workout/muscle prediction: {e}")
+            predicted_workout, predicted_workout_name = 12, "plank (error)"
+            predicted_muscle_group, predicted_muscle_group_name = 0, "none (error)"
+        
+        # Get corrections
+        try:
+            corrections = get_pose_corrections(landmarks_array, selected_workout)
+            
+            # Process corrections into the expected format
+            correction_dict = {}
+            if corrections is not None:
+                # Check if corrections is a NumPy array
+                if isinstance(corrections, np.ndarray) and corrections.size > 0:
+                    # Convert to a dictionary format for each joint
+                    for i, idx in enumerate(BODY_KEYPOINTS_INDICES):
+                        # Each joint has x, y, z corrections
+                        base_idx = i * 3
+                        correction_dict[str(idx)] = {
+                            'x': float(corrections[base_idx]),
+                            'y': float(corrections[base_idx + 1]),
+                            'z': float(corrections[base_idx + 2]) if len(corrections) > base_idx + 2 else 0.0
+                        }
+            
+            # Calculate average correction magnitude
+            correction_magnitude = 0
+            if correction_dict:
+                magnitudes = []
+                for joint_idx, correction in correction_dict.items():
+                    if isinstance(correction, dict) and 'x' in correction and 'y' in correction:
+                        magnitude = (correction['x']**2 + correction['y']**2)**0.5
+                        magnitudes.append(magnitude)
+                
+                if magnitudes:
+                    correction_magnitude = sum(magnitudes) / len(magnitudes)
+        except Exception as e:
+            print(f"Error processing corrections: {e}")
+            correction_dict = {}
+            correction_magnitude = 0
+        
+        # Add predictions to the response
+        response_data = {
+            'corrections': correction_dict,
+            'predicted_workout_type': predicted_workout,
+            'predicted_muscle_group': predicted_muscle_group
+        }
+        
+        # Calculate processing time
+        processing_time = (time.time() - start_time) * 1000  # Convert to ms
+        
+        # Send the response
+        emit('pose_corrections', response_data)
+        
+        # Calculate round-trip time
+        response_time = int(time.time() * 1000) - timestamp
+        
+        # Update tracking
+        update_session_data(client_id, frames=1, corrections=1, workout_type=selected_workout)
+        update_performance_metrics(
+            client_id,
+            confidence=avg_confidence,
+            correction_magnitude=correction_magnitude,
+            response_time=response_time,
+            processing_time=processing_time,
+            predicted_type=predicted_workout
+        )
+    except Exception as e:
+        print(f"Error handling pose data: {e}")
+        # Send an error response to the client
+        emit('error', {'message': f'Server error processing pose data: {str(e)}'})
 
 @app.route('/')
 def index():

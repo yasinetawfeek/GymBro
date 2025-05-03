@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, Trash2, Save, Edit3, User, 
   Mail, Calendar, MapPin, Phone, 
-  Shield, RefreshCw, Check
+  Shield, RefreshCw, Check, CheckCircle, AlertCircle
 } from 'lucide-react';
 
 // Animation variants
@@ -39,7 +39,7 @@ const modalVariants = {
   }
 };
 
-const UserDetailModal = ({ user, onClose, onDelete, onSave, isAdmin = false, isDarkMode = true }) => {
+const UserDetailModal = ({ user, onClose, onDelete, onSave, onToggleApproval, isAdmin = false, isDarkMode = true }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedUser, setEditedUser] = useState({ ...user });
   const [isSaving, setIsSaving] = useState(false);
@@ -278,6 +278,57 @@ const UserDetailModal = ({ user, onClose, onDelete, onSave, isAdmin = false, isD
             'location',
             'phoneNumber'
           ])}
+        
+        {isAdmin && user.rolename === 'AI Engineer' && (
+          <div className={`mt-6 pt-4 border-t ${
+            isDarkMode ? 'border-white/10' : 'border-gray-200'
+          }`}>
+            <div className="flex flex-col space-y-4">
+              <div className={isDarkMode ? 'text-white' : 'text-gray-800'}>
+                <h3 className="font-medium text-lg mb-2">Access Control</h3>
+                <div className="flex items-center mb-3">
+                  <div className={`px-3 py-1.5 rounded-lg flex items-center ${
+                    user.isApproved
+                      ? isDarkMode 
+                        ? 'bg-green-500/20 text-green-400' 
+                        : 'bg-green-100 text-green-700'
+                      : isDarkMode 
+                        ? 'bg-amber-500/20 text-amber-400' 
+                        : 'bg-amber-100 text-amber-700'
+                  }`}>
+                    {user.isApproved 
+                      ? <CheckCircle className="w-4 h-4 mr-2" /> 
+                      : <AlertCircle className="w-4 h-4 mr-2" />
+                    }
+                    <span className="font-medium">
+                      {user.isApproved ? 'Access Granted' : 'Access Revoked'}
+                    </span>
+                  </div>
+                </div>
+                <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {user.isApproved 
+                    ? 'This AI Engineer currently has full access to all engineering features.'
+                    : 'This AI Engineer\'s access is currently revoked and cannot use advanced features.'}
+                </p>
+              </div>
+              
+              <motion.button
+                whileHover={{ scale: 1.05, y: -2 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => onToggleApproval(user.id, !user.isApproved)}
+                className={`flex items-center justify-center space-x-2 px-4 py-2.5 rounded-lg text-sm shadow-md ${
+                  user.isApproved ? 
+                    (isDarkMode ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30' : 
+                               'bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200') :
+                    (isDarkMode ? 'bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30' : 
+                               'bg-green-50 hover:bg-green-100 text-green-600 border border-green-200')
+                }`}
+              >
+                <span className="font-medium">{user.isApproved ? 'Revoke Access' : 'Grant Access'}</span>
+              </motion.button>
+            </div>
+          </div>
+        )}
         
         {isAdmin && (
           <div className={`flex justify-end mt-6 pt-4 border-t ${

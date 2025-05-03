@@ -6,12 +6,21 @@ from .viewsets import *
 router = DefaultRouter()
 # router.register(r'users', UserViewSet.as_view(), basename='user')
 router.register(r'manage_accounts',AccountManagementViewSet, basename='manage_account')
+router.register(r'approvals', ApprovalViewSet, basename='approval')
+router.register(r'role_info', RoleInfoViewSet, basename='role_info')
+router.register(r'billing', BillingViewSet, basename='billing')
+router.register(r'invoices', InvoiceViewSet, basename='invoice')  # Register InvoiceViewSet
+router.register(r'subscriptions', SubscriptionViewSet, basename='subscription')  # Register SubscriptionViewSet
+router.register(r'usage', UsageTrackingViewSet, basename='usage')
+router.register(r'model-performance', ModelPerformanceViewSet, basename='model-performance')
+router.register(r'ml-models', MLModelViewSet, basename='ml-models')
 
 # urlpatterns = router.urls
 
 urlpatterns = [
     path('', include(router.urls)),
     path('my_account/', UserViewSet.as_view(), name='my_account'),
+    path('register/', RegisterView.as_view(), name='register'),
     path('train_model', TrainWorkoutClassiferViewSet.as_view({'post':'post'}),name='train_model'),
     path('predict_workout_classifer', PredictWorkoutClassiferViewSet.as_view({'post':'post'}),name='predict_workout_classifer'),
     path('stream-info/', StreamViewSet.as_view({'get': 'stream_info'}), name='stream-info'),
