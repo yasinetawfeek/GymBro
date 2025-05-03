@@ -47,10 +47,6 @@ This will start the frontend development server.
   - Send: `pose_data` event with landmarks data
   - Receive: `pose_corrections` event with correction data
 
-- REST API: 
-  - POST `/train_model`: Train the workout and muscle group classifiers
-  - POST `/predict_model`: Predict workout label for given data
-
 ## How It Works
 
 1. The frontend captures pose data using MediaPipe Pose detection.
@@ -58,3 +54,15 @@ This will start the frontend development server.
 3. The server processes the landmarks through the DNN model, using the barbell bicep curl workout type.
 4. The model returns pose corrections, which are sent back to the client.
 5. The frontend visualizes the corrections as arrows, guiding the user to the correct pose. 
+
+## Notebooks
+
+The project is supported by three key Jupyter notebooks that document the machine learning development process:
+
+1. **final_model_dnn.ipynb**: This notebook contains the development of the Deep Neural Network (DNN) model used for pose correction. It includes data preprocessing, model architecture design, training, and evaluation of the regression model that predicts optimal joint positions.
+
+2. **muscle_group_classifer_notebook.ipynb**: This notebook demonstrates the development of a classifier that identifies which muscle groups are being targeted during a workout. The model analyzes pose landmarks to determine primary muscle engagement, which helps provide appropriate feedback.
+
+3. **workout_classifer_final.ipynb**: This notebook implements a Long Short-Term Memory (LSTM) neural network that classifies entire workout sequences. It processes time-series pose data to identify which exercise is being performed, achieving high accuracy even with limited training data.
+
+These notebooks provide detailed documentation of the AI development process and can be referenced to understand the technical implementation behind the application. 
