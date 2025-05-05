@@ -5,10 +5,10 @@ charset-normalizer==3.4.1
 cryptography==44.0.1
 defusedxml==0.7.1
 Django==4.2.19
-django-cors-headers==4.7.0
+django-cors-headers
 django-extensions==3.2.3
 djangorestframework==3.15.2
-djangorestframework_simplejwt==5.5.0
+djangorestframework_simplejwt
 djoser==2.3.1
 dotenv==0.9.9
 drf-yasg==1.21.10
@@ -22,8 +22,8 @@ python-dotenv==1.0.1
 python3-openid==3.2.0
 requests==2.32.3
 requests-oauthlib==2.0.0
-social-auth-app-django==5.4.3
-social-auth-core==4.5.6
+social-auth-app-django
+social-auth-core
 sqlparse==0.5.3
 tzdata==2025.1
-urllib3==2.3.0
+urllib3
