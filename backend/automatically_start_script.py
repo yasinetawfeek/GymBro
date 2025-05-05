@@ -74,10 +74,15 @@ staff_two.save()
 # creating a bunch of users [customer role]
 
 # """
+list_users = { 'username': 'edmond', 'password': 'edmond', 'group': customer_group }
+# for i in range(1, 20):
+    # user = User.objects.create_user(username=f'user_{i}', password=f'user_{i}')
+    # print(f'User {i} created successfully')
+    # user.groups.add(customer_group)
+    # user.save()
 
-for i in range(1, 20):
-    user = User.objects.create_user(username=f'user_{i}', password=f'user_{i}')
-    print(f'User {i} created successfully')
+for user in list_users:
+    user = User.objects.create_user(username=user, password=user)
     user.groups.add(customer_group)
     user.save()
 
