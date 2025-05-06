@@ -9,6 +9,7 @@ import Model from 'react-body-highlighter';
 import { MuscleType, ModelType } from 'react-body-highlighter';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext'; // Add this import
+import { subscriptionService, usageService } from '../services/apiService';
 
 // Lucide icons for a more consistent look
 import { 
@@ -1956,14 +1957,9 @@ const TrainingPage = () => {
       }
 
       try {
-        const response = await fetch('http://localhost:8000/api/subscriptions/my_subscription/', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        if (response.ok) {
-          const data = await response.json();
+        const response = await subscriptionService.getCurrentSubscription();
+        if (response.status === 200) {
+          const data = response.data;
           // Check if user has an active subscription
           setHasSubscription(data && data.is_active);
         } else {

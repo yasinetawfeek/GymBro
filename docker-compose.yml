@@ -6,13 +6,10 @@ services:
       - "8000:8000"  
     env_file:
       - .env  
+    environment:
+      - RESET_DB=false  # Set to true if you want to reset the DB users during initialization
     depends_on:
       - db
-    command: >
-      bash -c "python manage.py migrate &&
-               python manage.py runserver 0.0.0.0:8000 &
-               sleep 10 &&
-               python automatically_start_script.py"
     
   frontend:
     build:

@@ -1,8 +1,8 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 
-// Replace with your actual API base URL
-const API_URL = 'http://localhost:8000/';
+// Use relative URL instead of hardcoded localhost address
+const API_URL = '/';
 
 // Create a more robust singleton pattern
 export const AuthContext = createContext(null);
