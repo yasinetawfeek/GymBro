@@ -126,7 +126,7 @@ const BillingOverview = ({ isDarkMode }) => {
     {
       id: 'premium',
       name: 'Premium',
-      price: 19.99,
+      price: 29.99,
       features: [
         'Unlimited time usage',
         'Unlimited corrections',
