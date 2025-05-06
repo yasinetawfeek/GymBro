@@ -897,7 +897,7 @@ const BillingOverview = ({ isDarkMode }) => {
                 <p className={`text-2xl font-bold mt-2 ${
                   isDarkMode ? 'text-white' : 'text-gray-800'
                 } relative z-10`}>
-                  {usageData.total_corrections_received.toLocaleString()}
+                  {(usageData.total_corrections_received || 0).toLocaleString()}
                 </p>
                 <div className="absolute bottom-0 right-0 p-3">
                   <CheckCircle className={`w-8 h-8 opacity-10 ${
