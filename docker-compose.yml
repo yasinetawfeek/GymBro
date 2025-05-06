@@ -1,13 +1,15 @@
 services:
-  # backend:
-  #   build:
-  #     context: ./backend  
-  #   ports:
-  #     - "8000:8000"  
-  #   env_file:
-  #     - .env  
-  #   depends_on:
-  #     - db  
+  backend:
+    build:
+      context: ./backend  
+    ports:
+      - "8000:8000"  
+    env_file:
+      - .env  
+    environment:
+      - RESET_DB=false  # Set to true if you want to reset the DB users during initialization
+    depends_on:
+      - db
     
   frontend:
     build:
@@ -15,27 +17,27 @@ services:
     ports:
       - "80:80"  
 
-  # ai:
-  #   build:
-  #     context: ./AI  
-  #   ports:
-  #     - "8001:8001"  
-  #   depends_on:
-  #     - backend
-  #   environment:
-  #     - FLASK_ENV=development
+  ai:
+    build:
+      context: ./AI  
+    ports:
+      - "8001:8001"  
+    depends_on:
+      - backend
+    environment:
+      - FLASK_ENV=development
 
-#   db:
-#     image: postgres:latest 
-#     container_name: postgres-container 
-#     environment:
-#       POSTGRES_USER: ${DB_USER} 
-#       POSTGRES_PASSWORD: ${DB_PASSWORD}  
-#       POSTGRES_DB: ${DB_NAME} 
-#     ports:
-#       - "5432:5432"  
-#     volumes:
-#       - postgres-data:/var/lib/postgresql/data  
+  db:
+    image: postgres:latest 
+    container_name: postgres-container 
+    environment:
+      POSTGRES_USER: ${DB_USER} 
+      POSTGRES_PASSWORD: ${DB_PASSWORD}  
+      POSTGRES_DB: ${DB_NAME} 
+    ports:
+      - "5432:5432"  
+    volumes:
+      - postgres-data:/var/lib/postgresql/data  
 
-# volumes:
-#   postgres-data: 
+volumes:
+  postgres-data:

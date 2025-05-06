@@ -1,8 +1,8 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 
-// Replace with your actual API base URL
-const API_URL = 'http://localhost:8000/';
+// Use relative URL instead of hardcoded localhost address
+const API_URL = '/';
 
 // Create a more robust singleton pattern
 export const AuthContext = createContext(null);
@@ -12,8 +12,19 @@ let globalUserState = null;
 let globalSetUserState = null;
 
 export const AuthProvider = ({ children }) => {
-  // Use a reference to the global state if available
-  const [user, setUser] = useState(globalUserState);
+  // Initialize user state from localStorage if available
+  const initialUser = (() => {
+    try {
+      const savedUser = localStorage.getItem('user');
+      return savedUser ? JSON.parse(savedUser) : globalUserState;
+    } catch (e) {
+      console.error("Error parsing user data from localStorage:", e);
+      return null;
+    }
+  })();
+  
+  // Use a reference to the global state if available, or fallback to localStorage
+  const [user, setUser] = useState(initialUser);
   const [token, setToken] = useState(localStorage.getItem('access_token') || null);
   // Add loading state to track when auth is fully initialized
   const [loading, setLoading] = useState(!!token);
@@ -48,16 +59,42 @@ export const AuthProvider = ({ children }) => {
             
             console.log("AuthContext: User profile data:", profileRes.data);
             
-            // Check if the response already includes is_admin field (our serializer adds this)
-            const userData = {
+            // Create a merged user data object from both responses
+            const mergedBackendUser = {
               ...authRes.data,
-              // Only add these properties if they don't already exist in the response
-              basicInfo: authRes.data.basicInfo || profileRes?.data?.basicInfo || {},
+              ...profileRes.data, // Overwrite with the profile data
             };
             
-            // Log the final user data to check its structure
-            console.log("AuthContext: Final processed user data:", userData);
-            setUser(userData);
+            // Now transform the merged backend data into the frontend format using userService
+            import('../services/userService').then(userServiceModule => {
+              const userService = userServiceModule.default;
+              // Use the transformUserData function to get data in proper format
+              const transformedUserData = userService.transformUserData(mergedBackendUser);
+              console.log("AuthContext: Transformed user data:", transformedUserData);
+              
+              // Update state and localStorage
+              setUser(transformedUserData);
+              localStorage.setItem('user', JSON.stringify(transformedUserData));
+            }).catch(error => {
+              console.error("Failed to load userService:", error);
+              
+              // Fallback if userService import fails
+              const userData = {
+                ...authRes.data,
+                basicInfo: {
+                  fullName: authRes.data.first_name && authRes.data.last_name 
+                    ? `${authRes.data.first_name} ${authRes.data.last_name}`
+                    : authRes.data.username,
+                  email: authRes.data.email,
+                  // Add other fields from profileRes.data if available
+                  ...profileRes.data.basicInfo
+                }
+              };
+              
+              setUser(userData);
+              localStorage.setItem('user', JSON.stringify(userData));
+            });
+            
           } catch (profileErr) {
             console.warn("Could not fetch detailed profile, using auth data only", profileErr);
             setUser({
@@ -66,6 +103,12 @@ export const AuthProvider = ({ children }) => {
                 g.name === 'Admin' || g === 'Admin'
               )
             });
+            localStorage.setItem('user', JSON.stringify({
+              ...authRes.data,
+              isAdmin: authRes.data.groups && authRes.data.groups.some(g => 
+                g.name === 'Admin' || g === 'Admin'
+              )
+            }));
           }
         } catch (err) {
           console.error('Error fetching user:', err);

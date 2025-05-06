@@ -1,38 +1,31 @@
-# Use an official Python image as the base
-FROM python:3.10-slim 
-#according to stackoverflow do not use 3.9 because 
-#ERROR: Could not find a version that satisfies the requirement contourpy==1.3.1
-#make sure you have 3.10 at least in order to pypass this error
+# Use a smaller CPU-only PyTorch image 
+FROM python:3.10-slim
 
-# Environment variables to prevent Python from writing pyc files and enable unbuffered logging
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+# Environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (e.g., for compiling any Python dependencies)
-# RUN apt-get update && \
-#     apt-get install -y build-essential libpq-dev && \
-#     apt-get clean
-
+# Install system dependencies for OpenCV and other requirements
 RUN apt-get update && \
     apt-get install -y python3-opencv libgl1 && \
-    rm -rf /var/lib/apt/lists/* \
+    rm -rf /var/lib/apt/lists/* && \
     apt-get clean
     
-# Copy and install Python dependencies
+# Install PyTorch CPU version (much smaller than CUDA version)
+RUN pip install --no-cache-dir torch==2.0.1 --index-url https://download.pytorch.org/whl/cpu
+
+# Copy and install Python dependencies excluding PyTorch (already installed)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
 
 # Copy the AI service files
 COPY . .
 
-
-# Expose port 8000 for the Flask app
+# Expose port for the Flask app
 EXPOSE 8001
 
-
-#start running the flask application which is solely responsible for AI API requests [training,predicting]
+# Start running the Flask application
 CMD ["python", "app/main.py"]

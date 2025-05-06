@@ -7,6 +7,7 @@ import {
   Mail, ChevronRight, ArrowDown
 } from 'lucide-react';
 import LoadingSpinner from './LoadingSpinner';
+import { invoiceService } from '../services/apiService';
 
 // Animation variants
 const fadeIn = {
@@ -153,32 +154,21 @@ const InvoiceDetailModal = ({ invoiceId, isDarkMode, onClose, onPaymentSuccess, 
   // Fetch invoice data on component mount
   useEffect(() => {
     const fetchInvoice = async () => {
+      if (!invoiceId) return;
+      
+      setLoading(true);
+      setError(null);
+      
       try {
-        console.log("Attempting to fetch invoice with ID:", invoiceId);
-        
-        const response = await axios.get(`http://localhost:8000/api/invoices/${invoiceId}/`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-          }
-        });
-        
-        // Add detailed console logging for debugging
-        console.log("=== INVOICE DATA DEBUGGING ===");
-        console.log("Raw invoice response:", response.data);
-        console.log("Subscription plan:", response.data.subscription_plan);
-        console.log("Subscription type:", response.data.subscription_type);
-        console.log("Subscription name:", response.data.subscription_name);
-        console.log("Subscription object:", response.data.subscription);
-        console.log("Subscription start date:", response.data.subscription_start_date);
-        console.log("Subscription end date:", response.data.subscription_end_date);
-        console.log("================================");
-        
-        // Add subscription_type to subscription_plan if it's not already there
+        // Use the new invoice service for getting invoice details
+        const response = await invoiceService.getInvoiceDetails(invoiceId);
         const invoiceData = response.data;
-        if (invoiceData.subscription && invoiceData.subscription.plan && !invoiceData.subscription_plan) {
-          console.log("Adding missing subscription_plan from subscription.plan");
-          invoiceData.subscription_plan = invoiceData.subscription.plan;
-        }
+        
+        // Ensure some properties exist
+        if (!invoiceData.status) invoiceData.status = 'pending';
+        if (!invoiceData.description) invoiceData.description = 'No description provided';
+        
+        // Handle subscription type vs plan naming inconsistency
         if (invoiceData.subscription_type && !invoiceData.subscription_plan) {
           console.log("Adding missing subscription_plan from subscription_type");
           invoiceData.subscription_plan = invoiceData.subscription_type;
@@ -188,7 +178,6 @@ const InvoiceDetailModal = ({ invoiceId, isDarkMode, onClose, onPaymentSuccess, 
         setLoading(false);
       } catch (err) {
         console.error('Error fetching invoice:', err);
-        console.error('Error details:', err.response || err.message);
         setError('Failed to load invoice details. Please try again.');
         setLoading(false);
       }
@@ -205,18 +194,10 @@ const InvoiceDetailModal = ({ invoiceId, isDarkMode, onClose, onPaymentSuccess, 
     setPaymentError(null);
 
     try {
-      await axios.post(`http://localhost:8000/api/invoices/${invoiceId}/pay/`, {}, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-        }
-      });
+      await invoiceService.payInvoice(invoiceId);
       
       // Update invoice data after payment
-      const updatedInvoice = await axios.get(`http://localhost:8000/api/invoices/${invoiceId}/`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-        }
-      });
+      const updatedInvoice = await invoiceService.getInvoiceDetails(invoiceId);
       
       setInvoice(updatedInvoice.data);
       setPaymentSuccess(true);

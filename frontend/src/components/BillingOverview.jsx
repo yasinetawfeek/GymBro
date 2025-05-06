@@ -13,6 +13,9 @@ import {
 import InvoiceDetailModal from './InvoiceDetailModal';
 import { useAuth } from '../context/AuthContext';
 
+// Import the API services at the top of the file
+import { invoiceService, subscriptionService, usageService } from '../services/apiService';
+
 // Animation variants
 const fadeIn = {
   hidden: { opacity: 0, y: 20 },
@@ -123,7 +126,7 @@ const BillingOverview = ({ isDarkMode }) => {
     {
       id: 'premium',
       name: 'Premium',
-      price: 19.99,
+      price: 29.99,
       features: [
         'Unlimited time usage',
         'Unlimited corrections',
@@ -167,13 +170,9 @@ const BillingOverview = ({ isDarkMode }) => {
     setLoading(true);
     setError(null);
     try {
-      // First try the correct endpoint for user's invoices
+      // Use the new invoice service
       console.log('Attempting to fetch invoices data...');
-      const response = await axios.get('/api/invoices/my_invoices/', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const response = await invoiceService.getMyInvoices();
       console.log('Raw invoice API response:', response);
       console.log('User invoice data (raw):', response.data);
       
@@ -256,11 +255,7 @@ const BillingOverview = ({ isDarkMode }) => {
     setSubscriptionLoading(true);
     try {
       console.log('Fetching current subscription...');
-      const response = await axios.get('/api/subscriptions/my_subscription/', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const response = await subscriptionService.getCurrentSubscription();
       console.log('Raw subscription response:', response);
       console.log('Current subscription data:', response.data);
       
@@ -272,7 +267,6 @@ const BillingOverview = ({ isDarkMode }) => {
       }
     } catch (error) {
       console.error('Error fetching subscription:', error);
-      console.error('Error details:', error.response || error.message);
       setCurrentSubscription(null);
     } finally {
       setSubscriptionLoading(false);
@@ -300,15 +294,7 @@ const BillingOverview = ({ isDarkMode }) => {
     
     try {
       console.log('Subscribing to plan:', selectedPlan);
-      const response = await axios.post('/api/subscriptions/subscribe/', 
-        { plan: selectedPlan },
-        { 
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
+      const response = await subscriptionService.subscribe({ plan: selectedPlan });
       
       console.log('Subscription response:', response.data);
       
@@ -345,7 +331,6 @@ const BillingOverview = ({ isDarkMode }) => {
       });
     } catch (error) {
       console.error('Error subscribing:', error);
-      console.error('Error details:', error.response || error.message);
       
       // Show error notification with more details
       const errorMessage = error.response?.data?.detail || 
@@ -897,7 +882,7 @@ const BillingOverview = ({ isDarkMode }) => {
                 <p className={`text-2xl font-bold mt-2 ${
                   isDarkMode ? 'text-white' : 'text-gray-800'
                 } relative z-10`}>
-                  {usageData.total_corrections_received.toLocaleString()}
+                  {(usageData.total_corrections_received || 0).toLocaleString()}
                 </p>
                 <div className="absolute bottom-0 right-0 p-3">
                   <CheckCircle className={`w-8 h-8 opacity-10 ${

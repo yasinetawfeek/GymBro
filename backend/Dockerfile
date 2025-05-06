@@ -10,8 +10,12 @@ WORKDIR /app
 
 # Install system dependencies (e.g., for compiling any Python dependencies)
 RUN apt-get update && \
-    apt-get install -y build-essential libpq-dev dos2unix && \
+    apt-get install -y build-essential libpq-dev dos2unix curl && \
     apt-get clean
+
+# Download wait-for script for database connection checking
+RUN curl -o /app/Wait-for https://raw.githubusercontent.com/eficode/wait-for/master/wait-for && \
+    chmod +x /app/Wait-for
 
 # Copy and install Python dependencies
 COPY requirements.txt /app/
