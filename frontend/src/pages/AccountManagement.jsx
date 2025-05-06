@@ -21,7 +21,7 @@ import ModelPerformance from '../components/ModelPerformance';
 import MLModels from '../components/MLModels';
 
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import userService from '../services/userService';
 
@@ -57,6 +57,7 @@ const errorNotificationVariants = {
 const AccountManagement = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [approvalStatus, setApprovalStatus] = useState(true);
@@ -108,6 +109,13 @@ const AccountManagement = () => {
     
     fetchRoleInfo();
   }, [auth.token]);
+  
+  // Check for navigation state on mount
+  useEffect(() => {
+    if (location.state?.activePage) {
+      setActivePage(location.state.activePage);
+    }
+  }, [location.state]);
   
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
@@ -183,16 +191,19 @@ const AccountManagement = () => {
   const userRole = getUserRole();
   console.log("Determined user role:", userRole);
 
-  // Set initial active page based on role
+  // Set initial active page based on role, but only if no navigation state exists
   useEffect(() => {
-    if (userRole === 'Admin') {
-      setActivePage('users');
-    } else if (userRole === 'AI Engineer') {
-      setActivePage('models');
-    } else {
-      setActivePage('profile');
+    // Only set default page if there's no navigation state
+    if (!location.state?.activePage) {
+      if (userRole === 'Admin') {
+        setActivePage('users');
+      } else if (userRole === 'AI Engineer') {
+        setActivePage('models');
+      } else {
+        setActivePage('profile');
+      }
     }
-  }, [userRole]);
+  }, [userRole, location.state]);
 
   // Adding navigation to fitness stats for non-admin users
   const navigateToStats = () => {

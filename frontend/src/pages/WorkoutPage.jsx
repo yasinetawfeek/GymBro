@@ -754,6 +754,8 @@ const TrainingPage = () => {
   const navigate = useNavigate();
   const { token } = useAuth(); // Get auth token from context
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [hasSubscription, setHasSubscription] = useState(true); // Add this state
+  const [isLoadingSubscription, setIsLoadingSubscription] = useState(true); // Add this state
   const webcamRef = useRef(null);
   const canvasRef = useRef(null);
   const [userLandmarksForDrawing, setUserLandmarksForDrawing] = useState(null);
@@ -1944,6 +1946,49 @@ const TrainingPage = () => {
     };
   }, [sessionId, sessionStartTime]);
 
+  // Add subscription check effect
+  useEffect(() => {
+    const checkSubscription = async () => {
+      if (!token) {
+        setHasSubscription(false);
+        setIsLoadingSubscription(false);
+        return;
+      }
+
+      try {
+        const response = await fetch('http://localhost:8000/api/subscriptions/my_subscription/', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          // Check if user has an active subscription
+          setHasSubscription(data && data.is_active);
+        } else {
+          setHasSubscription(false);
+        }
+      } catch (error) {
+        console.error('Error checking subscription:', error);
+        setHasSubscription(false);
+      } finally {
+        setIsLoadingSubscription(false);
+      }
+    };
+
+    checkSubscription();
+  }, [token]);
+
+  // Add navigation handlers
+  const handleGoHome = () => {
+    navigate('/');
+  };
+
+  const handleGoToSubscription = () => {
+    navigate('/settings', { state: { activePage: 'billing' } });
+  };
+
   // --- Render ---
   return (
     <motion.section 
@@ -1957,6 +2002,17 @@ const TrainingPage = () => {
       transition={{ duration: 0.5 }}
     >
       {!isFullscreen && <NavBar isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />}
+      
+      {/* Show subscription prompt if no subscription */}
+      <AnimatePresence>
+        {!isLoadingSubscription && !hasSubscription && (
+          <SubscriptionPrompt 
+            isDarkMode={isDarkMode}
+            onGoHome={handleGoHome}
+            onGoToSubscription={handleGoToSubscription}
+          />
+        )}
+      </AnimatePresence>
       
       {/* Custom Notifications Container */}
       <AnimatePresence>
@@ -2067,3 +2123,72 @@ const TrainingPage = () => {
 };
 
 export default TrainingPage;
+
+// Add new SubscriptionPrompt component
+const SubscriptionPrompt = ({ isDarkMode, onGoHome, onGoToSubscription }) => {
+  return (
+    <motion.div 
+      className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${
+        isDarkMode ? 'bg-black/80' : 'bg-white/80'
+      } backdrop-blur-sm`}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <motion.div 
+        className={`${
+          isDarkMode 
+            ? 'bg-gray-800 border border-white/10' 
+            : 'bg-white border border-gray-200'
+        } rounded-xl p-6 max-w-md w-full shadow-xl`}
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+      >
+        <div className="text-center mb-6">
+          <AlertTriangle className={`w-12 h-12 mx-auto mb-4 ${
+            isDarkMode ? 'text-yellow-400' : 'text-yellow-500'
+          }`} />
+          <h2 className={`text-xl font-semibold mb-2 ${
+            isDarkMode ? 'text-white' : 'text-gray-800'
+          }`}>
+            Subscription Required
+          </h2>
+          <p className={`${
+            isDarkMode ? 'text-gray-300' : 'text-gray-600'
+          }`}>
+            You need an active subscription to access the workout features. Please subscribe to continue.
+          </p>
+        </div>
+        
+        <div className="flex flex-col sm:flex-row gap-3">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={onGoHome}
+            className={`flex-1 py-2.5 px-4 rounded-lg font-medium ${
+              isDarkMode 
+                ? 'bg-gray-700 hover:bg-gray-600 text-white' 
+                : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
+            }`}
+          >
+            Go to Home
+          </motion.button>
+          
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={onGoToSubscription}
+            className={`flex-1 py-2.5 px-4 rounded-lg font-medium ${
+              isDarkMode 
+                ? 'bg-purple-600 hover:bg-purple-500 text-white' 
+                : 'bg-purple-600 hover:bg-purple-500 text-white'
+            }`}
+          >
+            View Subscriptions
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
