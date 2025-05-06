@@ -73,16 +73,60 @@ staff_two.save()
 # """
 # creating a bunch of users [customer role]
 
-# """
-list_users = { 'username': 'edmond', 'password': 'edmond', 'group': customer_group }
-# for i in range(1, 20):
-    # user = User.objects.create_user(username=f'user_{i}', password=f'user_{i}')
-    # print(f'User {i} created successfully')
-    # user.groups.add(customer_group)
-    # user.save()
 
-for user in list_users:
-    user = User.objects.create_user(username=user, password=user)
+
+# """
+
+
+Admin_user = User.objects.create_user(username='Admin', password='Admin',email='admin@ufcfur_15_3.com')
+Admin_user.groups.add(admin_group)
+Admin_user.save()
+
+First_name = User.objects.create_user(username='First', password='First',email='first.name@ufcfur_15_3.com')
+First_name.groups.add(ai_engineer_group)
+First_name.save()
+
+Tensa_name = User.objects.create_user(username='Tensa', password='Tensa',email='tensa.flow@ufcfur_15_3.com')
+Tensa_name.groups.add(ai_engineer_group)
+Tensa_name.save()
+
+
+"""
+User List
+AI Engineers
+
+Dr First (first.name@ufcfur_15_3.com) - AI Engineer
+Ms Tensa Flow (tensa.flow@ufcfur_15_3.com) - AI Engineer (pending approval in Case 2)
+
+Administrators
+
+A.N. Admin (admin@ufcfur_15_3.com) - Administrator
+
+Clients
+
+Mr Rob Smith (rob.smith@example.com) - Client
+Ms Liz Brown (liz.brown@example.com) - Client
+Mr Hesitant (hesitant@example.com) - Client
+Mr Edmond Hobbs (edmond.hobbs@darknet.com) - Client (from Case 1)
+
+
+"""
+list_users = [
+    {'username': 'Rob', 'password': 'Rob','email':'rob.smith@example.com', 'group': customer_group},
+    {'username': 'Liz', 'password': 'Liz','email':'liz.brown@example.com' ,'group': customer_group},
+    {'username': 'Hesitant', 'password': 'Hesitant','email':'hesitant@example.com', 'group': customer_group},
+    {'username': 'Edmond', 'password': 'Edmond','email':'edmond.hobbs@darknet.com' ,'group': customer_group}
+]
+
+
+# for i in range(1, 20):
+#     user = User.objects.create_user(username=f'user_{i}', password=f'user_{i}')
+#     print(f'User {i} created successfully')
+#     user.groups.add(customer_group)
+#     user.save()
+
+for user_instance in list_users:
+    user = User.objects.create_user(username=user_instance['username'], password=user_instance['password'], email=user_instance['email'])
     user.groups.add(customer_group)
     user.save()
 
