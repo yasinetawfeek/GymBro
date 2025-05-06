@@ -69,30 +69,48 @@ const deleteUser = async (id) => {
 
 // Transform backend user data to frontend format
 const transformUserData = (backendUser) => {
+  if (!backendUser) return null;
+
+  // Helper function to properly format values for display
+  const formatValue = (value, defaultValue = '') => {
+    // Only use the default value for null/undefined when displaying in UI
+    if (value === undefined || value === null) {
+      return defaultValue;
+    }
+    return value;
+  };
+  
   return {
+    id: backendUser.id,
+    username: backendUser.username,
+    email: backendUser.email,
+    groups: backendUser.groups,
+    rolename: backendUser.rolename,
+    is_admin: backendUser.is_admin,
     basicInfo: {
       fullName: backendUser.first_name && backendUser.last_name 
         ? `${backendUser.first_name} ${backendUser.last_name}`
         : backendUser.username,
       email: backendUser.email,
-      location: backendUser.location || 'N/A',
-      memberSince: new Date(backendUser.date_joined).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
+      location: formatValue(backendUser.location),
+      phoneNumber: formatValue(backendUser.phone_number),
+      memberSince: backendUser.date_joined 
+        ? new Date(backendUser.date_joined).toLocaleDateString('en-US', {
+            year: 'numeric', month: 'long', day: 'numeric'
+          })
+        : ''
     },
     fitnessProfile: {
-      height: backendUser.height || 'Not set',
-      weight: backendUser.weight || 'Not set',
-      bodyFat: backendUser.body_fat || 'Not set',
-      fitnessLevel: backendUser.fitness_level || 'Beginner'
+      height: formatValue(backendUser.height),
+      weight: formatValue(backendUser.weight),
+      bodyFat: formatValue(backendUser.body_fat),
+      fitnessLevel: formatValue(backendUser.fitness_level)
     },
     preferences: {
-      primaryGoal: backendUser.primary_goal || 'Not set',
-      workoutFrequency: backendUser.workout_frequency || 'Not set',
-      preferredTime: backendUser.preferred_time || 'Not set',
-      focusAreas: backendUser.focus_areas || 'Not set'
+      primaryGoal: formatValue(backendUser.primary_goal),
+      workoutFrequency: formatValue(backendUser.workout_frequency),
+      preferredTime: formatValue(backendUser.preferred_time),
+      focusAreas: formatValue(backendUser.focus_areas)
     },
     achievements: {
       workoutsCompleted: backendUser.workouts_completed?.toString() || '0',
@@ -124,6 +142,7 @@ const transformUserDataForBackend = (frontendUser) => {
     first_name: firstName,
     last_name: lastName,
     location: frontendUser.basicInfo?.location,
+    phone_number: frontendUser.basicInfo?.phoneNumber,
     
     // Fitness profile
     height: frontendUser.fitnessProfile?.height,
@@ -150,4 +169,4 @@ const userService = {
   transformUserDataForBackend
 };
 
-export default userService; 
+export default userService;

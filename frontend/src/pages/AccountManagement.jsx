@@ -251,22 +251,37 @@ const AccountManagement = () => {
       setError(null);
       
       console.log('ProfileUpdate: Original user data:', updatedData);
+      console.log('ProfileUpdate: Phone number from form:', updatedData.basicInfo?.phoneNumber);
       
       // Transform the data to match backend format
       const formattedData = userService.transformUserDataForBackend(updatedData);
       console.log('ProfileUpdate: Transformed data for backend:', formattedData);
+      console.log('ProfileUpdate: Phone number being sent to backend:', formattedData.phone_number);
       
       // Send the formatted data to the API
       const response = await updateProfile(formattedData);
       console.log('ProfileUpdate: API response:', response);
       
-      // Update the user context with the new data
+      // Update the user context with the new data - properly merge nested objects
       if (auth && auth.setUser) {
         console.log('ProfileUpdate: Updating user context');
-        auth.setUser({
+        
+        // Create a proper deep merge of the user data
+        const updatedUserData = {
           ...auth.user,
-          ...updatedData
-        });
+          basicInfo: { ...(auth.user?.basicInfo || {}), ...(updatedData.basicInfo || {}) },
+          fitnessProfile: { ...(auth.user?.fitnessProfile || {}), ...(updatedData.fitnessProfile || {}) },
+          preferences: { ...(auth.user?.preferences || {}), ...(updatedData.preferences || {}) },
+          achievements: { ...(auth.user?.achievements || {}), ...(updatedData.achievements || {}) }
+        };
+        
+        console.log('ProfileUpdate: Updated user context data:', updatedUserData);
+        console.log('ProfileUpdate: Phone number in updated context:', updatedUserData.basicInfo?.phoneNumber);
+        
+        auth.setUser(updatedUserData);
+        
+        // Also update localStorage to persist the changes
+        localStorage.setItem('user', JSON.stringify(updatedUserData));
       } else {
         console.warn('ProfileUpdate: Unable to update user context - setUser not available');
       }
