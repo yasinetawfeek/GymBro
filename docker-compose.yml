@@ -7,7 +7,12 @@ services:
     env_file:
       - .env  
     depends_on:
-      - db  
+      - db
+    command: >
+      bash -c "python manage.py migrate &&
+               python manage.py runserver 0.0.0.0:8000 &
+               sleep 10 &&
+               python automatically_start_script.py"
     
   frontend:
     build:
@@ -38,4 +43,4 @@ services:
       - postgres-data:/var/lib/postgresql/data  
 
 volumes:
-  postgres-data: 
+  postgres-data:
