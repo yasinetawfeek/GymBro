@@ -43,9 +43,32 @@ class UserCreateSerializer(serializers.ModelSerializer):
     # Use our custom email validator
     email = serializers.CharField(validators=[custom_email_validator])  # Changed to CharField with our validator
     
+    # Fitness profile fields that are not part of the standard User model
+    first_name = serializers.CharField(required=False, allow_blank=True)
+    last_name = serializers.CharField(required=False, allow_blank=True)
+    location = serializers.CharField(required=False, allow_blank=True)
+    height = serializers.CharField(required=False, allow_blank=True, allow_null=True)  
+    weight = serializers.CharField(required=False, allow_blank=True, allow_null=True)  
+    body_fat = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    fitness_level = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    primary_goal = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    workout_frequency = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    preferred_time = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    focus_areas = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    workouts_completed = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    days_streak = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    personal_bests = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    points = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    
     class Meta:
         model = User
-        fields = ['id', 'username', 'password', 'email', 'rolename', 'group', 'groups', 'is_admin', 'is_approved']
+        fields = [
+            'id', 'username', 'password', 'email', 'first_name', 'last_name', 'location',
+            'height', 'weight', 'body_fat', 'fitness_level', 'primary_goal', 
+            'workout_frequency', 'preferred_time', 'focus_areas', 'workouts_completed',
+            'days_streak', 'personal_bests', 'points',
+            'rolename', 'group', 'groups', 'is_admin', 'is_approved'
+        ]
         extra_kwargs = {'password': {'write_only': True}}
 
     def get_rolename(self, obj):
@@ -110,6 +133,26 @@ class UserCreateSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         is_self_update = self.context.get('is_self_update', False)
         
+        # Extract profile fields from validated data
+        profile_fields = [
+            'location', 'phone_number', 'height', 'weight', 'body_fat', 'fitness_level',
+            'primary_goal', 'workout_frequency', 'preferred_time', 'focus_areas',
+            'workouts_completed', 'days_streak', 'personal_bests', 'points'
+        ]
+        profile_data = {}
+        
+        # Move profile fields from validated_data to profile_data
+        for field in profile_fields:
+            if field in validated_data:
+                profile_data[field] = validated_data.pop(field)
+        
+        # If profile data exists, update the user's profile
+        if profile_data:
+            profile = instance.profile
+            for key, value in profile_data.items():
+                setattr(profile, key, value)
+            profile.save()
+        
         # If this is a self-update, bypass all role restriction checks
         if is_self_update:
             return super().update(instance, validated_data)
@@ -137,6 +180,22 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
         return super().update(instance, validated_data)
     
+    def to_representation(self, instance):
+        """Add profile fields to the serialized output"""
+        representation = super().to_representation(instance)
+        
+        # Add profile fields to the output
+        if hasattr(instance, 'profile'):
+            profile_fields = [
+                'location', 'phone_number', 'height', 'weight', 'body_fat', 'fitness_level', 
+                'primary_goal', 'workout_frequency', 'preferred_time', 'focus_areas',
+                'workouts_completed', 'days_streak', 'personal_bests', 'points'
+            ]
+            
+            for field in profile_fields:
+                representation[field] = getattr(instance.profile, field, None)
+                
+        return representation
 
 # Serializer for BillingRecord model
 class BillingRecordSerializer(serializers.ModelSerializer):

@@ -10,6 +10,28 @@ class UserProfile(models.Model):
     is_approved = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    # Personal Information
+    location = models.CharField(max_length=100, blank=True, null=True)
+    phone_number = models.CharField(max_length=20, blank=True, null=True)  
+    
+    # Fitness profile fields
+    height = models.CharField(max_length=50, blank=True, null=True)
+    weight = models.CharField(max_length=50, blank=True, null=True) 
+    body_fat = models.CharField(max_length=50, blank=True, null=True)
+    fitness_level = models.CharField(max_length=50, blank=True, null=True)
+    
+    # Preferences
+    primary_goal = models.CharField(max_length=100, blank=True, null=True)
+    workout_frequency = models.CharField(max_length=50, blank=True, null=True)
+    preferred_time = models.CharField(max_length=50, blank=True, null=True)
+    focus_areas = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Achievements
+    workouts_completed = models.CharField(max_length=20, blank=True, null=True)
+    days_streak = models.CharField(max_length=20, blank=True, null=True)
+    personal_bests = models.CharField(max_length=100, blank=True, null=True)
+    points = models.CharField(max_length=20, blank=True, null=True)
 
     def __str__(self):
         return f'{self.user.username} Profile'
