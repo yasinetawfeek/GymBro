@@ -8,16 +8,20 @@ echo "Waiting for PostgreSQL to start..."
 
 echo "Executing manage.py"
 
-# Create migrations if needed
-python manage.py makemigrations
-
-# Apply migrations
-python manage.py migrate
-
 # Check if we should reset the database before running the script
 if [ "$RESET_DB" = "true" ]; then
-    echo "Resetting database users as requested by RESET_DB flag"
+    echo "Resetting database as requested by RESET_DB flag"
+    # Find and delete all SQLite database files
+    find . -name "db.sqlite3" -type f -delete
+    # Force migrate with --run-syncdb to ensure tables are recreated
+    python manage.py migrate --run-syncdb
     python manage.py shell -c "from django.contrib.auth.models import User; User.objects.all().delete()"
+else
+    # Create migrations if needed
+    python manage.py makemigrations
+
+    # Apply migrations
+    python manage.py migrate
 fi
 
 # Run the initialization script with error handling

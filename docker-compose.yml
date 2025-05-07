@@ -7,7 +7,7 @@ services:
     env_file:
       - .env  
     environment:
-      - RESET_DB=false  # Set to true if you want to reset the DB users during initialization
+      - RESET_DB=true  # Set to true if you want to reset the DB users during initialization
     depends_on:
       - db
     
