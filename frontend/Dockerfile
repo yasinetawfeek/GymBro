@@ -35,11 +35,11 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Create startup script
-RUN echo '#!/bin/sh\n\
-wait-for-it backend:8000 -t 60\n\
-wait-for-it ai:8001 -t 60\n\
-exec nginx -g "daemon off;"\n\
-' > /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
+RUN echo '#!/bin/sh' > /docker-entrypoint.sh && \
+    echo 'wait-for-it backend:8000 -t 60' >> /docker-entrypoint.sh && \
+    echo 'wait-for-it ai:8001 -t 60' >> /docker-entrypoint.sh && \
+    echo 'exec nginx -g "daemon off;"' >> /docker-entrypoint.sh && \
+    chmod +x /docker-entrypoint.sh
 
 # Expose port 80
 EXPOSE 80
