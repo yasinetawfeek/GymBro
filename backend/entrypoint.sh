@@ -11,29 +11,17 @@ echo "Executing manage.py"
 # Check if we should reset the database before running the script
 if [ "$RESET_DB" = "true" ]; then
     echo "Resetting database as requested by RESET_DB flag"
-    
-    # Create migrations if needed before attempting any operations
+    # For PostgreSQL, we need to drop and recreate tables properly
+    # First, make sure migrations are created
     python manage.py makemigrations
     
-    # Connect to PostgreSQL and drop/recreate the database
-    PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -c "DROP SCHEMA public CASCADE;"
-    PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -c "CREATE SCHEMA public;"
+    # Use Django's flush command to clear the database
+    python manage.py flush --no-input
     
-    # Apply migrations one app at a time in proper order
-    python manage.py migrate auth
-    python manage.py migrate contenttypes
-    python manage.py migrate admin
-    python manage.py migrate sessions
-    python manage.py migrate DESD_App 0001_initial
-    python manage.py migrate DESD_App 0002
-    python manage.py migrate DESD_App 0003
-    python manage.py migrate DESD_App 0004
-    python manage.py migrate DESD_App 0005
-    python manage.py migrate DESD_App 0006
-    python manage.py migrate DESD_App 0007
-    python manage.py migrate DESD_App
+    # Apply all migrations from scratch in the correct order
+    python manage.py migrate --no-input
     
-    # Clean up any remaining User objects if needed
+    # Delete all users if needed
     python manage.py shell -c "from django.contrib.auth.models import User; User.objects.all().delete()"
 else
     # Create migrations if needed
