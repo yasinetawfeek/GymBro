@@ -35,9 +35,7 @@ const UserDetailsPage = ({ isDarkMode = true }) => {
     rolename: 'Customer',
     memberSince: 'March 2024',
     lastActive: '2 days ago',
-    status: 'Active',
-    location: 'New York, USA',
-    phoneNumber: '+1 (555) 123-4567'
+    status: 'Active'
   });
 
   const handleInputChange = (field, value) => {
@@ -66,8 +64,6 @@ const UserDetailsPage = ({ isDarkMode = true }) => {
       case 'memberSince': return <Calendar size={16} />;
       case 'lastActive': return <Calendar size={16} />;
       case 'status': return <Activity size={16} />;
-      case 'location': return <MapPin size={16} />;
-      case 'phoneNumber': return <Phone size={16} />;
       default: return <CheckCircle size={16} />;
     }
   };
@@ -218,7 +214,6 @@ const UserDetailsPage = ({ isDarkMode = true }) => {
 
       {renderSection('Account Information', ['id', 'username', 'email', 'rolename'])}
       {renderSection('Additional Details', ['memberSince', 'lastActive', 'status'])}
-      {renderSection('Personal Information', ['location', 'phoneNumber'])}
       
       <motion.div 
         className={`flex justify-end pt-6 mt-6 border-t ${

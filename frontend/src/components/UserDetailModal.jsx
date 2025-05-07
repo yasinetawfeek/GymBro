@@ -53,8 +53,6 @@ const UserDetailModal = ({ user, onClose, onDelete, onSave, onToggleApproval, is
       case 'rolename': return <Shield size={16} />;
       case 'memberSince': return <Calendar size={16} />;
       case 'lastActive': return <Calendar size={16} />;
-      case 'location': return <MapPin size={16} />;
-      case 'phoneNumber': return <Phone size={16} />;
       default: return <User size={16} />;
     }
   };
@@ -227,7 +225,7 @@ const UserDetailModal = ({ user, onClose, onDelete, onSave, onToggleApproval, is
             isDarkMode ? 'text-purple-400' : 'text-indigo-600'
           } font-medium`}>Details</span></h2>
           <div className="flex space-x-3">
-            <motion.button
+            {/* <motion.button
               whileHover={{ scale: 1.05, y: -2 }}
               whileTap={{ scale: 0.95 }}
               onClick={isEditing ? handleSave : () => setIsEditing(true)}
@@ -252,7 +250,7 @@ const UserDetailModal = ({ user, onClose, onDelete, onSave, onToggleApproval, is
                 <Edit3 className="w-5 h-5" />
               )}
               <span className="ml-2 font-medium">{isEditing ? 'Save' : 'Edit'}</span>
-            </motion.button>
+            </motion.button> */}
             <motion.button
               whileHover={{ scale: 1.05, y: -2 }}
               whileTap={{ scale: 0.95 }}
@@ -271,12 +269,10 @@ const UserDetailModal = ({ user, onClose, onDelete, onSave, onToggleApproval, is
         
         {renderSection('Account Information', ['id', 'username', 'email', 'rolename'])}
         
-        {(user.memberSince || user.lastActive || user.location || user.phoneNumber) && 
+        {(user.memberSince || user.lastActive) && 
           renderSection('Additional Details', [
             'memberSince', 
-            'lastActive', 
-            'location',
-            'phoneNumber'
+            'lastActive'
           ])}
         
         {isAdmin && user.rolename === 'AI Engineer' && (

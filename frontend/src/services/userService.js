@@ -92,8 +92,6 @@ const transformUserData = (backendUser) => {
         ? `${backendUser.first_name} ${backendUser.last_name}`
         : backendUser.username,
       email: backendUser.email,
-      location: formatValue(backendUser.location),
-      phoneNumber: formatValue(backendUser.phone_number),
       memberSince: backendUser.date_joined 
         ? new Date(backendUser.date_joined).toLocaleDateString('en-US', {
             year: 'numeric', month: 'long', day: 'numeric'
@@ -141,8 +139,6 @@ const transformUserDataForBackend = (frontendUser) => {
     email: frontendUser.basicInfo?.email,
     first_name: firstName,
     last_name: lastName,
-    location: frontendUser.basicInfo?.location,
-    phone_number: frontendUser.basicInfo?.phoneNumber,
     
     // Fitness profile
     height: frontendUser.fitnessProfile?.height,

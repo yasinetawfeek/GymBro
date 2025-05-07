@@ -19,9 +19,7 @@ const defaultUserData = {
   basicInfo: {
     fullName: '',
     email: '',
-    location: '',
-    memberSince: '',
-    phoneNumber: ''
+    memberSince: ''
   },
   fitnessProfile: {
     height: '',
@@ -69,9 +67,7 @@ const ProfileOverview = ({ userData, setUserData, isEditing, setIsEditing, icons
     email: userData?.basicInfo?.email || '',
     rolename: userData?.basicInfo?.role || 'User',
     memberSince: userData?.basicInfo?.memberSince || '',
-    lastActive: 'Today',
-    location: userData?.basicInfo?.location || '',
-    phoneNumber: userData?.basicInfo?.phoneNumber || ''
+    lastActive: 'Today'
   };
 
   const handleUserSave = (updatedUser) => {
@@ -81,8 +77,7 @@ const ProfileOverview = ({ userData, setUserData, isEditing, setIsEditing, icons
       basicInfo: {
         ...localUserData.basicInfo,
         fullName: updatedUser.fullName || updatedUser.username,
-        email: updatedUser.email,
-        location: updatedUser.location || localUserData.basicInfo.location,
+        email: updatedUser.email
       }
     };
     

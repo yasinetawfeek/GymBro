@@ -1055,7 +1055,7 @@ const ModelPerformance = ({ isDarkMode }) => {
               </div>
               
               {/* Export button */}
-              <div className="flex justify-end mt-2">
+              {/* <div className="flex justify-end mt-2">
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -1068,7 +1068,7 @@ const ModelPerformance = ({ isDarkMode }) => {
                   <Download className="w-4 h-4" />
                   <span>Export Data</span>
                 </motion.button>
-              </div>
+              </div> */}
             </motion.div>
           )}
         </AnimatePresence>

@@ -84,7 +84,7 @@ const NavBar = ({ isDarkMode, toggleDarkMode }) => {
           </motion.div>
           
           <div className="hidden md:flex space-x-6">
-            <motion.a 
+            {/* <motion.a 
               href="#features" 
               className={`${isDarkMode ? 'text-white hover:text-purple-400' : 'text-gray-600 hover:text-indigo-500'} 
                 font-medium text-sm transition-colors`}
@@ -101,7 +101,7 @@ const NavBar = ({ isDarkMode, toggleDarkMode }) => {
               whileTap={{ scale: 0.95 }}
             >
               How It Works
-            </motion.a>
+            </motion.a> */}
           </div>
           
           <div className="flex items-center space-x-4">
@@ -212,22 +212,22 @@ const NavBar = ({ isDarkMode, toggleDarkMode }) => {
             transition={{ duration: 0.2 }}
           >
             <div className="flex flex-col space-y-4">
-              <a 
+              {/* <a 
                 href="#features" 
                 className={`${isDarkMode ? 'text-white hover:text-purple-400' : 'text-gray-600 hover:text-indigo-500'} 
                   font-medium text-sm py-2 px-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors`}
                 onClick={() => setIsMenuOpen(false)}
               >
                 Features
-              </a>
-              <a 
+              </a> */}
+              {/* <a 
                 href="#how-it-works" 
                 className={`${isDarkMode ? 'text-white hover:text-purple-400' : 'text-gray-600 hover:text-indigo-500'} 
                   font-medium text-sm py-2 px-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors`}
                 onClick={() => setIsMenuOpen(false)}
               >
                 How It Works
-              </a>
+              </a> */}
               <a
                 href="/workout" 
                 className={`${isDarkMode ? 'text-white hover:text-purple-400' : 'text-gray-600 hover:text-indigo-500'} 

@@ -100,8 +100,6 @@ const UserManagement = ({ isDarkMode = true, onSelectUser }) => {
             memberSince: new Date(user.date_joined).toLocaleDateString(),
             lastActive: 'Recently',
             status: user.is_active ? 'Active' : 'Inactive',
-            location: user.location || 'Not specified',
-            phoneNumber: user.phone_number || 'Not specified',
             isApproved: isApproved
           };
         }));
@@ -175,7 +173,7 @@ const UserManagement = ({ isDarkMode = true, onSelectUser }) => {
           User <span className="text-purple-400 font-medium">Management</span>
         </h2>
         
-        <motion.button
+        {/* <motion.button
           whileHover={{ scale: 1.05, y: -2 }}
           whileTap={{ scale: 0.95 }}
           className={`${
@@ -186,7 +184,7 @@ const UserManagement = ({ isDarkMode = true, onSelectUser }) => {
         >
           <UserPlus className="w-4 h-4" />
           <span className="font-medium">Add User</span>
-        </motion.button>
+        </motion.button> */}
       </div>
 
       {error && (
