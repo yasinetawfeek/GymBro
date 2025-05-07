@@ -10,7 +10,7 @@ WORKDIR /app
 
 # Install system dependencies (e.g., for compiling any Python dependencies)
 RUN apt-get update && \
-    apt-get install -y build-essential libpq-dev dos2unix curl postgresql-client netcat-openbsd && \
+    apt-get install -y build-essential libpq-dev dos2unix curl && \
     apt-get clean
 
 # Download wait-for script for database connection checking
