@@ -29,11 +29,6 @@ Create Groups
 
 """
 
-
-# User.objects.all().delete()
-
-
-
 # Helper function to create user if it doesn't exist
 def create_user_if_not_exists(username, password, email=None, groups=None):
     try:
@@ -102,7 +97,7 @@ list_users = [
     {'username': 'Paul', 'password': 'Paul', 'email':'Paul.mark@example.com', 'group': customer_group ,'surname':'mark', 'forename':'Paul', 'title':'Mr'},
 
 
-    {'username': 'First', 'password': 'First', 'email':'first.name@ufcfur_15_3.com', 'group': ai_engineer_group ,'surname':'Second', 'forename':'First', 'title':'Dr'},
+    # {'username': 'First', 'password': 'First', 'email':'first.name@ufcfur_15_3.com', 'group': ai_engineer_group ,'surname':'Second', 'forename':'First', 'title':'Dr'},
     # {'username': 'Admin', 'password': 'Admin', 'email':'admin@ufcfur_15_3.com', 'group': admin_group ,'surname':'Admin', 'forename':'Admin', 'title':'Dr'}
 
 
