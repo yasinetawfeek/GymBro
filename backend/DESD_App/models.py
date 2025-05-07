@@ -6,6 +6,14 @@ from django.utils import timezone
 import uuid
 
 class UserProfile(models.Model):
+    TITLE_CHOICES = [
+        ('Mr', 'Mr'),
+        ('Mrs', 'Mrs'),
+        ('Miss', 'Miss'),
+        ('Ms', 'Ms'),
+        ('Dr', 'Dr'),
+        ('Prof', 'Professor'),
+    ]
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     is_approved = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -32,6 +40,12 @@ class UserProfile(models.Model):
     days_streak = models.CharField(max_length=20, blank=True, null=True)
     personal_bests = models.CharField(max_length=100, blank=True, null=True)
     points = models.CharField(max_length=20, blank=True, null=True)
+
+
+    # More personal information
+    surname = models.CharField(max_length=50, blank=True, null=True)
+    forename = models.CharField(max_length=50, blank=True, null=True)
+    title = models.CharField(max_length=5, choices=TITLE_CHOICES , blank=True, null=True)
 
     def __str__(self):
         return f'{self.user.username} Profile'

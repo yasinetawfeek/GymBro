@@ -12,6 +12,8 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 django.setup()
 
 from django.contrib.auth.models import User
+from DESD_App.models import UserProfile
+
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
 from DESD_App.models import BillingRecord
@@ -73,25 +75,60 @@ customer_group, created = Group.objects.get_or_create(name='Customer')
 staff_user = create_user_if_not_exists('Dong2025', 'Dong2025', groups=[admin_group])
 ChatGPT = create_user_if_not_exists('ChatGPT', 'ChatGPT', groups=[ai_engineer_group])
 staff_two = create_user_if_not_exists('Yahia2025', 'Yahia2025', groups=[admin_group])
-Admin_user = create_user_if_not_exists('Admin', 'Admin', email='admin@ufcfur_15_3.com', groups=[admin_group])
-First_name = create_user_if_not_exists('First', 'First', email='first.name@ufcfur_15_3.com', groups=[ai_engineer_group])
-Tensa_name = create_user_if_not_exists('Tensa', 'Tensa', email='tensa.flow@ufcfur_15_3.com', groups=[ai_engineer_group])
+# Admin_user = create_user_if_not_exists('Admin', 'Admin', email='admin@ufcfur_15_3.com', groups=[admin_group])
+# First_name = create_user_if_not_exists('First', 'First', email='first.name@ufcfur_15_3.com', groups=[ai_engineer_group])
+# Tensa_name = create_user_if_not_exists('Tensa', 'Tensa', email='tensa.flow@ufcfur_15_3.com', groups=[ai_engineer_group])
 
 # Create client users
+
+
 list_users = [
-    {'username': 'Rob', 'password': 'Rob', 'email':'rob.smith@example.com', 'group': customer_group},
-    {'username': 'Liz', 'password': 'Liz', 'email':'liz.brown@example.com', 'group': customer_group},
-    {'username': 'Hesitant', 'password': 'Hesitant', 'email':'hesitant@example.com', 'group': customer_group},
-    {'username': 'Edmond', 'password': 'Edmond', 'email':'edmond.hobbs@darknet.com', 'group': customer_group}
+
+    {'username': 'Rob', 'password': 'Rob', 'email':'rob.smith@example.com', 'group': customer_group ,'surname':'smith', 'forename':'Rob', 'title':'Mr'},
+    {'username': 'Liz', 'password': 'Liz', 'email':'liz.brown@example.com', 'group': customer_group ,'surname':'brown' , 'forename':'Liz', 'title':'Ms' },
+    {'username': 'Hesitant', 'password': 'Hesitant', 'email':'hesitant@example.com', 'group': customer_group ,'surname':'hesitant' , 'forename':'Reven', 'title':'Mr'},
+    {'username': 'Edmond', 'password': 'Edmond', 'email':'edmond.hobbs@darknet.com', 'group': customer_group ,'surname':'hobbs', 'forename':'Edmond', 'title':'Mr'},
+    {'username': 'Ahmed', 'password': 'Ahmed', 'email':'Ahmed.moh@example.com', 'group': customer_group ,'surname':'mohamed', 'forename':'Ahmed', 'title':'Mr'},
+    {'username': 'Mike', 'password': 'Mike', 'email':'Mike.meh@example.com', 'group': customer_group ,'surname':'mehanheh', 'forename':'Mike', 'title':'Mr'},
+    {'username': 'Nathan', 'password': 'Nathan', 'email':'Nathan.hob@example.com', 'group': customer_group ,'surname':'hobb', 'forename':'Nathan', 'title':'Mr'},
+    {'username': 'Omar', 'password': 'Omar', 'email':'Omar.ahmed@example.com', 'group': customer_group ,'surname':'ahmed', 'forename':'Omar', 'title':'Mr'},
+    {'username': 'Mark', 'password': 'Mark', 'email':'Mark.shon@example.com', 'group': customer_group ,'surname':'shon', 'forename':'Mark', 'title':'Mr'},
+    {'username': 'John', 'password': 'John', 'email':'John.sehn@example.com', 'group': customer_group ,'surname':'sehn', 'forename':'John', 'title':'Mr'},
+
+
+    {'username': 'First', 'password': 'First', 'email':'first.name@ufcfur_15_3.com', 'group': ai_engineer_group ,'surname':'Second', 'forename':'First', 'title':'Dr'},
+    {'username': 'Admin', 'password': 'Admin', 'email':'admin@ufcfur_15_3.com', 'group': admin_group ,'surname':'Admin', 'forename':'Admin', 'title':'Dr'}
+
+
 ]
 
+
+
+
+# First create the users
 for user_instance in list_users:
-    create_user_if_not_exists(
-        username=user_instance['username'], 
-        password=user_instance['password'], 
-        email=user_instance['email'], 
-        groups=[user_instance['group']]
+    user, created = User.objects.get_or_create(
+        username=user_instance['username'],
+        email=user_instance['email']
     )
+    
+    if created:
+        user.set_password(user_instance['password'])
+        user.groups.add(user_instance['group'])
+        user.save()
+    
+    # Now create or update the user profile
+    UserProfile.objects.update_or_create(
+        user=user,  # Link to the user we just created
+        defaults={
+            'title': user_instance['title'],
+            'forename': user_instance['forename'],
+            'surname': user_instance['surname']
+        }
+    )
+
+
+
 
 # Set admin users as staff
 users = User.objects.filter(groups=admin_group, is_staff=False)

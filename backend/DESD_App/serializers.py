@@ -59,6 +59,10 @@ class UserCreateSerializer(serializers.ModelSerializer):
     days_streak = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     personal_bests = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     points = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    surname = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    forename = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    title = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     
     class Meta:
         model = User
@@ -67,7 +71,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
             'height', 'weight', 'body_fat', 'fitness_level', 'primary_goal', 
             'workout_frequency', 'preferred_time', 'focus_areas', 'workouts_completed',
             'days_streak', 'personal_bests', 'points',
-            'rolename', 'group', 'groups', 'is_admin', 'is_approved'
+            'rolename', 'group', 'groups', 'is_admin', 'is_approved','surname', 'forename', 'title'
         ]
         extra_kwargs = {'password': {'write_only': True}}
 
@@ -137,7 +141,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
         profile_fields = [
             'location', 'phone_number', 'height', 'weight', 'body_fat', 'fitness_level',
             'primary_goal', 'workout_frequency', 'preferred_time', 'focus_areas',
-            'workouts_completed', 'days_streak', 'personal_bests', 'points'
+            'workouts_completed', 'days_streak', 'personal_bests', 'points','surname', 'forename', 'title'
         ]
         profile_data = {}
         
@@ -189,7 +193,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
             profile_fields = [
                 'location', 'phone_number', 'height', 'weight', 'body_fat', 'fitness_level', 
                 'primary_goal', 'workout_frequency', 'preferred_time', 'focus_areas',
-                'workouts_completed', 'days_streak', 'personal_bests', 'points'
+                'workouts_completed', 'days_streak', 'personal_bests', 'points','surname', 'forename', 'title'
             ]
             
             for field in profile_fields:
