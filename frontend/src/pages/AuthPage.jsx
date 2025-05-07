@@ -1,21 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   AtSign, 
   Lock, 
   User, 
   LogIn, 
-  LogOut, 
   Users,
   Sun,
   Moon,
   AlertCircle,
   ArrowLeft,
   CheckCircle,
-  UserCheck
+  UserCheck,
+  CircleUser
 } from 'lucide-react';
 
-import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from "react-router-dom";
 import RoleSelection from '../components/RoleSelection';
@@ -43,6 +42,9 @@ const AuthPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
+  const [title, setTitle] = useState('');
+  const [forename, setForename] = useState('');
+  const [surname, setSurname] = useState('');
   const [role, setRole] = useState('Customer');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [generalError, setGeneralError] = useState('');
@@ -108,10 +110,10 @@ const AuthPage = () => {
           return;
         }
         
-        console.log("Attempting registration with:", { username, email, role });
+        console.log("Attempting registration with:", { username, email, role, title, forename, surname });
         
-        // Call register with the selected role
-        await user.register(email, username, password, role);
+        // Call register with the selected role and personal details
+        await user.register(email, username, password, role, title, forename, surname);
         setIsLogin(true);
         
         // Show different messages based on role
@@ -306,39 +308,136 @@ const AuthPage = () => {
 
             <AnimatePresence>
               {!isLogin && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                >
-                  <label className={`block mb-2 flex items-center text-sm font-medium ${
-                    isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                  }`}>
-                    <AtSign className={`w-4 h-4 mr-2 ${
-                      isDarkMode ? 'text-purple-400' : 'text-indigo-500'
-                    }`} />
-                    Email
-                  </label>
-                  <div className="relative group">
-                    <input 
-                      type="text"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className={`w-full px-4 py-3 rounded-lg focus:outline-none transition-all duration-300 ${
-                        isDarkMode 
-                          ? 'bg-gray-700/70 text-white border border-gray-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500' 
-                          : 'bg-white text-gray-900 border border-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500'
-                      } ${errors.email ? 'border-red-500' : ''}`}
-                      placeholder="Enter your email"
-                      required
-                    />
-                    {errors.email && (
-                      <p className={`mt-2 text-sm ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
-                        {Array.isArray(errors.email) ? errors.email[0] : errors.email}
-                      </p>
-                    )}
-                  </div>
-                </motion.div>
+                <>
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                  >
+                    <label className={`block mb-2 flex items-center text-sm font-medium ${
+                      isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      <AtSign className={`w-4 h-4 mr-2 ${
+                        isDarkMode ? 'text-purple-400' : 'text-indigo-500'
+                      }`} />
+                      Email
+                    </label>
+                    <div className="relative group">
+                      <input 
+                        type="text"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className={`w-full px-4 py-3 rounded-lg focus:outline-none transition-all duration-300 ${
+                          isDarkMode 
+                            ? 'bg-gray-700/70 text-white border border-gray-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500' 
+                            : 'bg-white text-gray-900 border border-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500'
+                        } ${errors.email ? 'border-red-500' : ''}`}
+                        placeholder="Enter your email"
+                        required
+                      />
+                      {errors.email && (
+                        <p className={`mt-2 text-sm ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+                          {Array.isArray(errors.email) ? errors.email[0] : errors.email}
+                        </p>
+                      )}
+                    </div>
+                  </motion.div>
+
+                  {/* Title Field */}
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                  >
+                    <label className={`block mb-2 flex items-center text-sm font-medium ${
+                      isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      <CircleUser className={`w-4 h-4 mr-2 ${
+                        isDarkMode ? 'text-purple-400' : 'text-indigo-500'
+                      }`} />
+                      Title
+                    </label>
+                    <div className="relative group">
+                      <select 
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        className={`w-full px-4 py-3 rounded-lg focus:outline-none transition-all duration-300 ${
+                          isDarkMode 
+                            ? 'bg-gray-700/70 text-white border border-gray-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500' 
+                            : 'bg-white text-gray-900 border border-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500'
+                        }`}
+                      >
+                        <option value="">Select a title</option>
+                        <option value="Mr">Mr</option>
+                        <option value="Mrs">Mrs</option>
+                        <option value="Miss">Miss</option>
+                        <option value="Ms">Ms</option>
+                        <option value="Dr">Dr</option>
+                        <option value="Prof">Professor</option>
+                      </select>
+                    </div>
+                  </motion.div>
+
+                  {/* Forename Field */}
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                  >
+                    <label className={`block mb-2 flex items-center text-sm font-medium ${
+                      isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      <User className={`w-4 h-4 mr-2 ${
+                        isDarkMode ? 'text-purple-400' : 'text-indigo-500'
+                      }`} />
+                      Forename
+                    </label>
+                    <div className="relative group">
+                      <input 
+                        type="text"
+                        value={forename}
+                        onChange={(e) => setForename(e.target.value)}
+                        className={`w-full px-4 py-3 rounded-lg focus:outline-none transition-all duration-300 ${
+                          isDarkMode 
+                            ? 'bg-gray-700/70 text-white border border-gray-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500' 
+                            : 'bg-white text-gray-900 border border-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500'
+                        }`}
+                        placeholder="Enter your first name"
+                        required
+                      />
+                    </div>
+                  </motion.div>
+
+                  {/* Surname Field */}
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                  >
+                    <label className={`block mb-2 flex items-center text-sm font-medium ${
+                      isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      <User className={`w-4 h-4 mr-2 ${
+                        isDarkMode ? 'text-purple-400' : 'text-indigo-500'
+                      }`} />
+                      Surname
+                    </label>
+                    <div className="relative group">
+                      <input 
+                        type="text"
+                        value={surname}
+                        onChange={(e) => setSurname(e.target.value)}
+                        className={`w-full px-4 py-3 rounded-lg focus:outline-none transition-all duration-300 ${
+                          isDarkMode 
+                            ? 'bg-gray-700/70 text-white border border-gray-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500' 
+                            : 'bg-white text-gray-900 border border-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500'
+                        }`}
+                        placeholder="Enter your last name"
+                        required
+                      />
+                    </div>
+                  </motion.div>
+                </>
               )}
             </AnimatePresence>
 

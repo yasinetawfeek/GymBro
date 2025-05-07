@@ -151,7 +151,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Function to register a new user with role selection
-  const register = async (email, username, password, role = 'Customer') => {
+  const register = async (email, username, password, role = 'Customer', title = '', forename = '', surname = '') => {
     try {
       setLoading(true);
       console.log("AuthContext: Attempting registration with role:", role);
@@ -161,7 +161,10 @@ export const AuthProvider = ({ children }) => {
         email,
         username,
         password,
-        group: role // Send the selected role
+        group: role, // Send the selected role
+        title,       // Add title field
+        forename,    // Add forename field
+        surname     // Add surname field
       });
       
       console.log("AuthContext: Registration successful:", response.data);
