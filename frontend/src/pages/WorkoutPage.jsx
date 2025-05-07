@@ -9,7 +9,7 @@ import Model from 'react-body-highlighter';
 import { MuscleType, ModelType } from 'react-body-highlighter';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext'; // Add this import
-import { subscriptionService, usageService } from '../services/apiService';
+import { subscriptionService, usageService, lastViewedExerciseService } from '../services/apiService';
 
 // Lucide icons for a more consistent look
 import { 
@@ -642,7 +642,9 @@ const InfoPanel = ({
         <div className="flex justify-between items-center">
           <div className="flex items-center">
             <span className="text-sm font-medium opacity-70">Current:</span>
-            <span className="ml-2 font-semibold">{workoutMap[currentWorkout]}</span>
+            <span className="ml-2 font-semibold">
+              {currentWorkout !== null ? workoutMap[currentWorkout] : "Loading..."}
+            </span>
           </div>          
           {/* Add session timer here */}
           <div className="flex items-center text-xs">
@@ -651,7 +653,7 @@ const InfoPanel = ({
           </div>
         </div>
 
-        {predictedWorkout !== currentWorkout && (
+        {currentWorkout !== null && predictedWorkout !== currentWorkout && (
             <div className="flex items-center">
               <span className="text-sm font-medium opacity-70">Suggested:</span>
               <span className={`ml-2 px-2 py-0.5 rounded-full text-sm ${
@@ -774,10 +776,11 @@ const TrainingPage = () => {
   const cameraInstanceRef = useRef(null);
   const sendIntervalRef = useRef(null);
   const sessionDurationTimerRef = useRef(null);
+  const autoUpdateTimerRef = useRef(null);
+  const lastAutoUpdateTimeRef = useRef(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   
   // Add these new refs for tracking updates
-  const lastAutoUpdateTimeRef = useRef(0);
   const pendingStatsRef = useRef({
     framesProcessed: 0,
     correctionsSent: 0,
@@ -801,9 +804,10 @@ const TrainingPage = () => {
   // Modified workout prediction state
   const [predictedWorkout, setPredictedWorkout] = useState(12); // Default to plank (12)
   
-  // Replace the selectedWorkout state with currentWorkout
-  const [currentWorkout, setCurrentWorkout] = useState(12); // Default to plank (12)
-  // Add ref to track current workout synchronously
+  // Replace the selectedWorkout state with currentWorkout, but use null as initial value
+  // We'll fetch the last viewed exercise and update it before showing UI
+  const [currentWorkout, setCurrentWorkout] = useState(null); 
+  // Add ref to track current workout synchronously with a default of 12 (plank)
   const currentWorkoutRef = useRef(12);
   
   // Add state for muscle group prediction
@@ -857,6 +861,19 @@ const TrainingPage = () => {
     
     // Add to the queue instead of showing immediately
     setNotificationQueue(prev => [...prev, { ...notificationData, id }]);
+    
+    // If notification is related to workout suggestion or change, update stats immediately
+    if (notificationData.type === 'info' && 
+        (notificationData.message.includes('Changed to') || 
+         notificationData.message.includes('workout') || 
+         notificationData.message.includes('exercise'))) {
+      
+      // Only send update if we have an active session
+      if (sessionId && token) {
+        // Send immediate stats update
+        forceUpdateUsageStats();
+      }
+    }
     
     return id; // Return the ID for reference
   };
@@ -914,36 +931,58 @@ const TrainingPage = () => {
     // Also update the ref to ensure synchronous blocking of future changes
     nextAllowedChangeTimeRef.current = Date.now() + NOTIFICATION_COOLDOWN;
     
-    // If we have an active session, update the backend with the new workout type
-    if (sessionId && token) {
-      // Send an immediate update to the server with the new workout type
-      const currentDurationInSeconds = sessionStartTime ? Math.floor((Date.now() - sessionStartTime) / 1000) : 0;
-      
-      fetch(`http://localhost:8000/api/usage/update_metrics/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          session_id: sessionId,
-          workout_type: parsedId,
-          session_duration: currentDurationInSeconds,
-          frames_processed: 0,  // No new frames in this update
-          corrections_sent: 0   // No new corrections in this update
-        })
+    // If user is authenticated, update the last viewed exercise in the backend
+    if (token) {
+      // Update the last viewed exercise record
+      lastViewedExerciseService.updateLastViewed({
+        workout_type: parsedId,
+        workout_name: workoutMap[parsedId]
       })
-      .then(response => {
-        if (response.ok) {
-          console.log(`[Handle Workout Change] Backend updated with new workout type: ${workoutMap[parsedId]}`);
-        } else {
-          console.error('[Handle Workout Change] Failed to update backend:', response.statusText);
-        }
+      .then(() => {
+        console.log(`[LastViewed] Updated last viewed exercise to: ${workoutMap[parsedId]}`);
       })
       .catch(error => {
-        console.error('[Handle Workout Change] Error updating backend:', error);
+        console.error('[LastViewed] Error updating last viewed exercise:', error);
       });
     }
+    
+    // If we have an active session, update the workout type in the session tracking
+    if (sessionId && token) {
+      // Convert workout map to a format with string keys for better JSON compatibility
+      const stringWorkoutMap = {};
+      Object.entries(workoutMap).forEach(([key, value]) => {
+        stringWorkoutMap[key.toString()] = value;
+      });
+      
+      // Create update payload with the new workout
+      const updateData = {
+        session_id: sessionId,
+        workout_type: parsedId,
+        workout_map: stringWorkoutMap,
+        frames_processed: pendingStatsRef.current.framesProcessed,
+        corrections_sent: pendingStatsRef.current.correctionsSent,
+        session_duration: pendingStatsRef.current.sessionDuration
+      };
+      
+      // Update the session info on the backend
+      usageService.updateMetrics(updateData)
+        .then(response => {
+          console.log(`[Session] Updated session workout type to: ${workoutMap[parsedId]}`);
+        })
+        .catch(error => {
+          console.error('[Session] Error updating session workout type:', error);
+        });
+        
+      // Also force an immediate update to make sure this change is recorded
+      forceUpdateUsageStats();
+    }
+    
+    // Add notification
+    addNotification({
+      type: 'info',
+      message: `Changed to ${workoutMap[parsedId]}`,
+      autoClose: 3000
+    });
   };
 
   // Replace the updateStableWorkoutPrediction function with improved auto-change approach
@@ -1046,6 +1085,14 @@ const TrainingPage = () => {
                 message: `Changed to ${workoutMap[mostFrequentType]}`,
                 autoClose: 3000
               });
+              
+              // Force update stats since this is a significant event
+              if (sessionId && token) {
+                // Wait a moment for handleWorkoutChange to complete its updates
+                setTimeout(() => {
+                  forceUpdateUsageStats();
+                }, 500);
+              }
               
               setLastSuggestedWorkout(mostFrequentType);
               setLastNotificationTime(now);
@@ -1182,7 +1229,7 @@ const TrainingPage = () => {
           console.log('[Socket Event] Received "connected" confirmation:', data);
           
           // Store session ID if provided and ensure we start a new session on the backend
-          if (data.session_id) {
+          if (data && data.session_id) {
             console.log('[Socket Event] Session ID received:', data.session_id);
             setSessionId(data.session_id);
             
@@ -1192,10 +1239,16 @@ const TrainingPage = () => {
               correctionsSent: 0
             });
             console.log('[Socket Event] Session stats reset for new session');
-          } else if (data.client_id) {
+          } else if (data && data.client_id) {
             // If we didn't get a session_id but got a client_id, we should manually start a session
-            console.log('[Socket Event] No session ID received, starting a new session manually');
-            startSessionOnBackend(data.client_id);
+            console.log('[Socket Event] No session ID received, starting a new session manually with client ID:', data.client_id);
+            
+            // Check if we're already tracking a session before starting a new one
+            if (!sessionId) {
+              startSessionOnBackend(data.client_id);
+            } else {
+              console.log('[Socket Event] Already tracking session ID:', sessionId);
+            }
           } else {
             console.warn('[Socket Event] No session ID or client ID received in connected event');
           }
@@ -1305,8 +1358,29 @@ const TrainingPage = () => {
     
     // Send final session stats when component unmounts
     return () => { 
-      reportFinalSessionStats();
+      // Report final session stats if we have an active session
+      if (sessionId && token) {
+        console.log('[Component Unmount] Reporting final stats for session:', sessionId);
+        reportFinalSessionStats();
+      }
       
+      // Cleanup all timers
+      if (sessionDurationTimerRef.current) {
+        clearInterval(sessionDurationTimerRef.current);
+        sessionDurationTimerRef.current = null;
+      }
+      
+      if (autoUpdateTimerRef.current) {
+        clearInterval(autoUpdateTimerRef.current);
+        autoUpdateTimerRef.current = null;
+      }
+      
+      if (sendIntervalRef.current) {
+        clearInterval(sendIntervalRef.current);
+        sendIntervalRef.current = null;
+      }
+      
+      // Disconnect WebSocket
       if (socketRef.current) { 
         console.log("[Socket Cleanup] Disconnecting WebSocket."); 
         socketRef.current.disconnect(); 
@@ -1317,49 +1391,76 @@ const TrainingPage = () => {
 
   // Function to report final session stats
   const reportFinalSessionStats = () => {
-    if (!sessionId || !token) {
-      console.warn('[Session] Cannot report final stats: Missing session ID or token');
+    if (!token || !sessionId) {
+      console.log('[Session] Cannot report final stats: No active session or token');
       return;
     }
     
-    // Calculate total session duration in seconds
-    const totalDurationInSeconds = sessionStartTime ? Math.floor((Date.now() - sessionStartTime) / 1000) : 0;
+    // Convert workout map to a format with string keys for better JSON compatibility
+    const stringWorkoutMap = {};
+    Object.entries(workoutMap).forEach(([key, value]) => {
+      stringWorkoutMap[key.toString()] = value;
+    });
     
-    // Get the current stats directly to ensure we have the latest values
-    const currentStats = {
-      session_id: sessionId,
-      frames_processed: sessionStats.framesProcessed,
-      corrections_sent: sessionStats.correctionsSent,
-      session_duration: totalDurationInSeconds,
-      workout_type: currentWorkoutRef.current // Include the current workout type
+    // Get the latest stats
+    const finalStats = {
+      frames_processed: sessionStats.framesProcessed + pendingStatsRef.current.framesProcessed,
+      corrections_sent: sessionStats.correctionsSent + pendingStatsRef.current.correctionsSent,
+      session_duration: sessionDuration,
+      workout_type: currentWorkoutRef.current,
+      workout_map: stringWorkoutMap,
+      platform: getPlatform()
     };
     
-    try {
-      console.log('[Session] Reporting final session stats:', currentStats);
-      // Report session stats to backend via REST API
-      fetch(`http://localhost:8000/api/usage/end_session/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(currentStats)
-      }).then(response => {
-        if (response.ok) {
-          console.log('[Session] Final stats reported successfully');
-          return response.json();
-        } else {
-          console.error('[Session] Failed to report final stats:', response.statusText);
-          throw new Error(`Failed to report stats: ${response.statusText}`);
-        }
-      }).then(data => {
-        console.log('[Session] Server response:', data);
-      }).catch(error => {
-        console.error('[Session] Error reporting final stats:', error);
-      });
-    } catch (e) {
-      console.error('[Session] Error reporting session stats:', e);
-    }
+    console.log('[Session] Reporting final session stats:', finalStats);
+    
+    // Send final stats to the backend
+    fetch(`http://localhost:8000/api/usage/end_session/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        session_id: sessionId,
+        ...finalStats
+      })
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(data => {
+      console.log('[Session] Final stats reported successfully:', data);
+      
+      // Clear the session ID and timers
+      setSessionId(null);
+      setSessionStartTime(null);
+      setSessionDuration(0);
+      
+      // Clear any running timers
+      if (sessionDurationTimerRef.current) {
+        clearInterval(sessionDurationTimerRef.current);
+        sessionDurationTimerRef.current = null;
+      }
+      
+      if (autoUpdateTimerRef.current) {
+        clearInterval(autoUpdateTimerRef.current);
+        autoUpdateTimerRef.current = null;
+      }
+      
+      // Reset pending stats
+      pendingStatsRef.current = {
+        framesProcessed: 0,
+        correctionsSent: 0,
+        sessionDuration: 0
+      };
+    })
+    .catch(error => {
+      console.error('[Session] Error reporting final stats:', error);
+    });
   };
 
   // Update the useEffect that handles periodic session stats reporting
@@ -1463,8 +1564,20 @@ const TrainingPage = () => {
       return;
     }
     
+    // Ensure sessionStartTime exists
+    if (!sessionStartTime) {
+      console.warn('[Session] Cannot force update: Missing session start time');
+      return;
+    }
+    
     // Calculate current duration in seconds
-    const currentDurationInSeconds = sessionStartTime ? Math.floor((Date.now() - sessionStartTime) / 1000) : 0;
+    const currentDurationInSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
+    
+    // Convert workout map to a format with string keys for better JSON compatibility
+    const stringWorkoutMap = {};
+    Object.entries(workoutMap).forEach(([key, value]) => {
+      stringWorkoutMap[key.toString()] = value;
+    });
     
     // Combine current stats with pending stats for a complete update
     const statsToReport = {
@@ -1472,11 +1585,14 @@ const TrainingPage = () => {
       frames_processed: sessionStats.framesProcessed,
       corrections_sent: sessionStats.correctionsSent,
       session_duration: currentDurationInSeconds,
-      workout_type: currentWorkoutRef.current
+      workout_type: currentWorkoutRef.current,
+      workout_map: stringWorkoutMap,
+      platform: getPlatform()
     };
     
-    console.log('[Session] Force updating usage stats:', statsToReport);
+    console.log('[Session] Force-updating stats:', statsToReport);
     
+    // Send the update to the backend
     fetch(`http://localhost:8000/api/usage/update_metrics/`, {
       method: 'POST',
       headers: {
@@ -1486,48 +1602,26 @@ const TrainingPage = () => {
       body: JSON.stringify(statsToReport)
     })
     .then(response => {
-      if (response.ok) {
-        console.log('[Session] Force update successful');
-        // Reset pending stats since we just sent everything
-        pendingStatsRef.current = {
-          framesProcessed: 0,
-          correctionsSent: 0,
-          sessionDuration: 0
-        };
-        // Update the last auto-update time
-        lastAutoUpdateTimeRef.current = Date.now();
-        
-        // Show a small notification
-        addNotification({
-          type: 'success',
-          message: 'Usage stats updated',
-          autoClose: 2000
-        });
-        
-        // Pulse the indicator
-        const autoUpdateIndicator = document.getElementById('auto-update-indicator');
-        if (autoUpdateIndicator) {
-          autoUpdateIndicator.classList.add('pulse-success');
-          setTimeout(() => {
-            autoUpdateIndicator.classList.remove('pulse-success');
-          }, 1000);
-        }
-      } else {
-        console.error('[Session] Force update failed:', response.statusText);
-        addNotification({
-          type: 'error',
-          message: 'Failed to update usage stats',
-          autoClose: 3000
-        });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+      return response.json();
+    })
+    .then(data => {
+      console.log(`[Session] Stats updated successfully for session: ${data.session_id}`);
+      
+      // Reset pending stats since we just committed them
+      pendingStatsRef.current = {
+        framesProcessed: 0,
+        correctionsSent: 0,
+        sessionDuration: currentDurationInSeconds
+      };
+      
+      // Update last auto-update time
+      lastAutoUpdateTimeRef.current = Date.now();
     })
     .catch(error => {
-      console.error('[Session] Error in force update:', error);
-      addNotification({
-        type: 'error',
-        message: 'Network error updating stats',
-        autoClose: 3000
-      });
+      console.error('[Session] Error updating stats:', error);
     });
   };
 
@@ -1824,42 +1918,64 @@ const TrainingPage = () => {
 
   // Add this function to manually start a session on the backend
   const startSessionOnBackend = (clientId) => {
+    // Make sure we're authenticated first
     if (!token) {
-      console.error('[Session] Cannot start session: No authentication token');
+      console.log('[Session] Cannot start session - not authenticated');
+      setConnectionStatus('disconnected');
       return;
     }
-
-    console.log('[Session] Manually starting a new session');
-    fetch('http://localhost:8000/api/usage/start_session/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        workout_type: currentWorkout,
-        platform: 'web',
-        client_id: clientId
-      })
-    })
-    .then(response => {
-      if (response.ok) {
-        return response.json();
-      }
-      throw new Error('Failed to start session');
-    })
+    
+    console.log(`[Session] Starting backend session for client ID: ${clientId}`);
+        
+    // Convert workout map to a format with string keys for better JSON compatibility
+    const stringWorkoutMap = {};
+    Object.entries(workoutMap).forEach(([key, value]) => {
+      stringWorkoutMap[key.toString()] = value;
+    });
+    
+    // Use the currentWorkoutRef to ensure we have the most up-to-date value
+    const currentWorkoutType = currentWorkoutRef.current;
+    
+    // Create session payload - now including the current workout type
+    const sessionData = {
+      client_id: clientId,
+      workout_type: currentWorkoutType, // Use the current workout
+      workout_map: stringWorkoutMap,
+      platform: getPlatform()
+    };
+    
+    console.log(`[Session] Using workout type ${currentWorkoutType} (${workoutMap[currentWorkoutType]}) for new session`);
+    
+    // Create the session
+    usageService.startSession(sessionData)
     .then(data => {
-      console.log('[Session] New session started:', data.session_id);
+      // Store session ID and start time
       setSessionId(data.session_id);
+      setSessionStartTime(new Date(data.started));
       
-      // Reset session stats
-      setSessionStats({
-        framesProcessed: 0,
-        correctionsSent: 0
-      });
+      console.log(`[Session] Backend session started with ID: ${data.session_id}`);
+      
+      // Start timer to track session duration
+      sessionDurationTimerRef.current = setInterval(() => {
+        const now = new Date();
+        const startTime = new Date(data.started);
+        const durationSeconds = Math.floor((now - startTime) / 1000);
+        setSessionDuration(durationSeconds);
+        pendingStatsRef.current.sessionDuration = durationSeconds;
+      }, 1000);
+      
+      // Also start a timer for periodic auto-updates
+      // This ensures stats are periodically saved even if the user doesn't end the session properly
+      lastAutoUpdateTimeRef.current = Date.now();
+      
+      // Set up auto-update every 60 seconds
+      autoUpdateTimerRef.current = setInterval(() => {
+        forceUpdateUsageStats();
+      }, 60000); 
     })
     .catch(error => {
-      console.error('[Session] Error starting session:', error);
+      console.error('[Session] Error starting backend session:', error);
+      setConnectionStatus('disconnected');
     });
   };
 
@@ -1929,6 +2045,10 @@ const TrainingPage = () => {
       clearInterval(sessionDurationTimerRef.current);
     }
     
+    if (autoUpdateTimerRef.current) {
+      clearInterval(autoUpdateTimerRef.current);
+    }
+    
     // Start a timer to update the duration every second
     sessionDurationTimerRef.current = setInterval(() => {
       const durationInSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
@@ -1943,6 +2063,10 @@ const TrainingPage = () => {
       if (sessionDurationTimerRef.current) {
         clearInterval(sessionDurationTimerRef.current);
         sessionDurationTimerRef.current = null;
+      }
+      if (autoUpdateTimerRef.current) {
+        clearInterval(autoUpdateTimerRef.current);
+        autoUpdateTimerRef.current = null;
       }
     };
   }, [sessionId, sessionStartTime]);
@@ -1984,6 +2108,37 @@ const TrainingPage = () => {
   const handleGoToSubscription = () => {
     navigate('/settings?page=billing');
   };
+
+  // Add useEffect to load last viewed exercise when component mounts
+  useEffect(() => {
+    // Only fetch if user is authenticated
+    if (token) {
+      lastViewedExerciseService.getLastViewed()
+        .then(response => {
+          const data = response.data;
+          if (data && data.workout_type !== null) {
+            console.log(`[LastViewed] Found last viewed workout: ${data.workout_name} (type: ${data.workout_type})`);
+            // Update both the state and ref
+            setCurrentWorkout(data.workout_type);
+            currentWorkoutRef.current = data.workout_type;
+            // Also update the last stable workout ref for consistency
+            lastStableWorkoutRef.current = data.workout_type;
+          } else {
+            console.log('[LastViewed] No last viewed workout found, using default (Plank)');
+            // Set to default if no last viewed workout
+            setCurrentWorkout(12); // Default to plank
+          }
+        })
+        .catch(error => {
+          console.error('[LastViewed] Error fetching last viewed exercise:', error);
+          // Set to default on error
+          setCurrentWorkout(12); // Default to plank
+        });
+    } else {
+      // Not logged in, use default
+      setCurrentWorkout(12);
+    }
+  }, [token]);
 
   // --- Render ---
   return (
@@ -2077,10 +2232,22 @@ const TrainingPage = () => {
             
             {/* WorkoutSelector always in same position */}
             <div className="absolute top-4 left-16 z-40">
-              <WorkoutSelector 
-                selectedWorkout={currentWorkout} 
-                onSelectWorkout={handleWorkoutChange} 
-              />
+              {currentWorkout !== null ? (
+                <WorkoutSelector 
+                  selectedWorkout={currentWorkout} 
+                  onSelectWorkout={handleWorkoutChange} 
+                />
+              ) : (
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: 0.1 }}
+                  className="flex items-center space-x-2 bg-black/40 text-white px-4 py-2 rounded-lg shadow-md backdrop-blur-sm border border-gray-600/30"
+                >
+                  <span>Loading workout...</span>
+                  <div className="w-4 h-4 rounded-full border-2 border-purple-500 border-t-transparent animate-spin"></div>
+                </motion.div>
+              )}
             </div>
             
             <MuscleGroupVisualizer 
@@ -2095,21 +2262,37 @@ const TrainingPage = () => {
             
             {/* InfoPanel moved inside video container with consistent positioning */}
             <div className="absolute bottom-4 left-0 right-0 mx-auto max-w-xl px-4">
-              <InfoPanel 
-                currentWorkout={currentWorkout}
-                predictedWorkout={predictedWorkout}
-                predictionConfidence={predictionConfidence}
-                predictionThreshold={SUGGESTION_THRESHOLD}
-                predictedMuscleGroup={predictedMuscleGroup}
-                muscleGroupConfidence={muscleGroupConfidence}
-                feedbackLatency={feedbackLatency}
-                receivedCount={receivedCount}
-                connectionStatus={connectionStatus}
-                onForceUpdate={forceUpdateUsageStats}
-                pendingUpdates={pendingStatsRef.current ? 
-                  pendingStatsRef.current.framesProcessed + pendingStatsRef.current.correctionsSent : 0}
-                sessionDuration={sessionDuration}
-              />
+              {currentWorkout !== null ? (
+                <InfoPanel 
+                  currentWorkout={currentWorkout}
+                  predictedWorkout={predictedWorkout}
+                  predictionConfidence={predictionConfidence}
+                  predictionThreshold={SUGGESTION_THRESHOLD}
+                  predictedMuscleGroup={predictedMuscleGroup}
+                  muscleGroupConfidence={muscleGroupConfidence}
+                  feedbackLatency={feedbackLatency}
+                  receivedCount={receivedCount}
+                  connectionStatus={connectionStatus}
+                  onForceUpdate={forceUpdateUsageStats}
+                  pendingUpdates={pendingStatsRef.current ? 
+                    pendingStatsRef.current.framesProcessed + pendingStatsRef.current.correctionsSent : 0}
+                  sessionDuration={sessionDuration}
+                />
+              ) : (
+                <motion.div 
+                  className="bg-black/60 text-white px-5 py-3 rounded-xl backdrop-blur-md border border-white/10 shadow-lg"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4 }}
+                >
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center">
+                      <span className="text-sm font-medium opacity-70">Loading your last workout...</span>
+                      <div className="ml-2 w-4 h-4 rounded-full border-2 border-purple-500 border-t-transparent animate-spin"></div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
             </div>
           </div>
         </motion.div>
@@ -2187,4 +2370,22 @@ const SubscriptionPrompt = ({ isDarkMode, onGoHome, onGoToSubscription }) => {
       </motion.div>
     </motion.div>
   );
+};
+
+// Helper function to get a platform name that fits in the database field length
+const getPlatform = () => {
+  // Extract just the platform or browser name, limited to 50 chars
+  if (navigator.platform) {
+    return navigator.platform.substring(0, 50);
+  } else if (navigator.userAgentData && navigator.userAgentData.platform) {
+    return navigator.userAgentData.platform.substring(0, 50);
+  } else {
+    // Simple browser detection as fallback
+    const ua = navigator.userAgent;
+    if (ua.includes('Firefox')) return 'Firefox';
+    if (ua.includes('Chrome')) return 'Chrome';
+    if (ua.includes('Safari')) return 'Safari';
+    if (ua.includes('Edge')) return 'Edge';
+    return 'Web';
+  }
 };

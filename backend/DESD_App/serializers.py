@@ -367,6 +367,15 @@ class MLModelSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['created_at', 'updated_at']
 
+class UserLastViewedExerciseSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the UserLastViewedExercise model
+    """
+    class Meta:
+        model = UserLastViewedExercise
+        fields = ['workout_type', 'workout_name', 'last_viewed_at']
+        read_only_fields = ['last_viewed_at']
+
 
 
 
