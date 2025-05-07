@@ -4,7 +4,8 @@ import {
   UserCircle, Mail, MapPin, Calendar,
   Ruler, Weight, Heart, Medal, Target, 
   Clock, Dumbbell, ActivitySquare, TrendingUp,
-  Award, AlertCircle, X, RefreshCw, BarChart3, ChevronLeft
+  Award, AlertCircle, X, RefreshCw, BarChart3, ChevronLeft,
+  Shield, Lock
 } from 'lucide-react';
 
 import NavBar from '../components/Navbar';
@@ -61,6 +62,7 @@ const AccountManagement = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [approvalStatus, setApprovalStatus] = useState(true);
+  const [permissionError, setPermissionError] = useState(null);
   
   // Change this to match Navbar.jsx - don't destructure
   const auth = useAuth();
@@ -110,20 +112,8 @@ const AccountManagement = () => {
     fetchRoleInfo();
   }, [auth.token]);
   
-  // Check for navigation state on mount
-  useEffect(() => {
-    if (location.state?.activePage) {
-      setActivePage(location.state.activePage);
-    }
-  }, [location.state]);
-  
-  const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode);
-  };
-
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [activePage, setActivePage] = useState('profile');
   const [fitnessStats, setFitnessStats] = useState({
     recentWorkouts: [
       { date: '2025-03-10', type: 'Upper Body', duration: '45 min', intensity: 'High' },
@@ -139,6 +129,62 @@ const AccountManagement = () => {
   });
   const [selectedUser, setSelectedUser] = useState(null);
   const [userListRefreshTrigger, setUserListRefreshTrigger] = useState(0);
+
+  // Parse URL parameters for page navigation
+  const getPageFromUrl = () => {
+    const searchParams = new URLSearchParams(location.search);
+    return searchParams.get('page') || 'profile';
+  };
+
+  // Set active page from URL
+  const [activePage, setActivePage] = useState(getPageFromUrl());
+
+  // Update URL when changing pages
+  const handlePageChange = (page) => {
+    setPermissionError(null);
+    
+    // Check permission before changing the page
+    if (hasPagePermission(page)) {
+      navigate(`/settings?page=${page}`, { replace: true });
+      setActivePage(page);
+    } else {
+      // Set permission error instead of changing the page
+      setPermissionError(`You don't have permission to access the ${getPageLabel(page)} page.`);
+    }
+  };
+
+  // Get a human-readable label for a page ID
+  const getPageLabel = (pageId) => {
+    const pageLabels = {
+      'profile': 'Profile',
+      'stats': 'Fitness Stats',
+      'users': 'User Management',
+      'approvals': 'Approval Requests',
+      'billing': 'Billing',
+      'billingActivity': 'Billing Activity',
+      'userDetails': 'User Details',
+      'performance': 'Model Performance',
+      'models': 'ML Models'
+    };
+    
+    return pageLabels[pageId] || pageId;
+  };
+
+  // Update activePage when URL changes
+  useEffect(() => {
+    const pageFromUrl = getPageFromUrl();
+    
+    // Check if the user has permission for the requested page
+    if (hasPagePermission(pageFromUrl)) {
+      setActivePage(pageFromUrl);
+      setPermissionError(null);
+    } else {
+      // Instead of redirecting, set the permission error and keep the URL unchanged
+      setPermissionError(`You don't have permission to access the ${getPageLabel(pageFromUrl)} page.`);
+      // Keep using the page from URL so the URL stays unchanged
+      setActivePage(pageFromUrl);
+    }
+  }, [location.search]);
 
   // Determine user role from backend data
   const getUserRole = () => {
@@ -191,23 +237,51 @@ const AccountManagement = () => {
   const userRole = getUserRole();
   console.log("Determined user role:", userRole);
 
-  // Set initial active page based on role, but only if no navigation state exists
-  useEffect(() => {
-    // Only set default page if there's no navigation state
-    if (!location.state?.activePage) {
-      if (userRole === 'Admin') {
-        setActivePage('users');
-      } else if (userRole === 'AI Engineer') {
-        setActivePage('models');
-      } else {
-        setActivePage('profile');
-      }
+  // Define page permissions based on user role
+  const hasPagePermission = (page) => {
+    // Pages accessible by all roles
+    if (['profile', 'stats', 'billing'].includes(page)) {
+      return true;
     }
-  }, [userRole, location.state]);
+    
+    // Admin-only pages
+    if (['users', 'approvals', 'billingActivity'].includes(page)) {
+      return userRole === 'Admin';
+    }
+    
+    // AI Engineer pages (require approval)
+    if (['models', 'performance'].includes(page)) {
+      return userRole === 'Admin' || (userRole === 'AI Engineer' && approvalStatus);
+    }
+    
+    return false;
+  };
+
+  // Set initial active page based on role and URL
+  useEffect(() => {
+    const pageFromUrl = getPageFromUrl();
+    
+    // If URL has a page parameter, try to use it
+    if (pageFromUrl && pageFromUrl !== 'profile') {
+      if (hasPagePermission(pageFromUrl)) {
+        setActivePage(pageFromUrl);
+      } else {
+        // Set permission error but don't redirect
+        setPermissionError(`You don't have permission to access the ${getPageLabel(pageFromUrl)} page.`);
+        // Still set the active page to show the permission denied component
+        setActivePage(pageFromUrl);
+      }
+    } else {
+      // No page in URL, set default based on role
+      const defaultPage = userRole === 'Admin' ? 'users' : 
+                         userRole === 'AI Engineer' ? 'models' : 'profile';
+      navigate(`/settings?page=${defaultPage}`, { replace: true });
+    }
+  }, [userRole]);
 
   // Adding navigation to fitness stats for non-admin users
   const navigateToStats = () => {
-    setActivePage('stats');
+    handlePageChange('stats');
   };
 
   const icons = {
@@ -316,6 +390,11 @@ const AccountManagement = () => {
     setError(null);
   };
 
+  // Clear permission error message
+  const clearPermissionError = () => {
+    setPermissionError(null);
+  };
+
   // Show loading spinner while user data is being fetched
   if (loading) {
     return (
@@ -407,8 +486,42 @@ const AccountManagement = () => {
     }
   };
 
+  // Permission Denied Component
+  const PermissionDenied = () => (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <Lock className={`w-16 h-16 mb-4 ${isDarkMode ? 'text-red-400' : 'text-red-500'}`} />
+      <h2 className={`text-2xl font-semibold mb-3 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+        Access Denied
+      </h2>
+      <p className={`max-w-md mb-6 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+        {permissionError || "You don't have permission to access this page."}
+      </p>
+      <button
+        onClick={() => handlePageChange('profile')}
+        className={`px-4 py-2 rounded-lg font-medium ${
+          isDarkMode 
+            ? 'bg-purple-600 hover:bg-purple-500 text-white' 
+            : 'bg-purple-600 hover:bg-purple-500 text-white'
+        }`}
+      >
+        Go to Profile
+      </button>
+    </div>
+  );
+
   const renderActivePage = () => {
     console.log("Rendering active page:", activePage);
+    
+    // If there's a permission error, show the permission denied component
+    if (permissionError) {
+      return <PermissionDenied />;
+    }
+    
+    // Otherwise, render the requested page if permission is granted
+    if (!hasPagePermission(activePage)) {
+      return <PermissionDenied />;
+    }
+    
     switch (activePage) {
       case 'profile':
         console.log("Rendering ProfileOverview component");
@@ -431,7 +544,7 @@ const AccountManagement = () => {
                 Your <span className="text-purple-400 font-medium">Fitness Analytics</span>
               </h2>
               <button
-                onClick={() => setActivePage('profile')}
+                onClick={() => handlePageChange('profile')}
                 className={`p-2 rounded-lg ${
                   isDarkMode 
                     ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' 
@@ -479,6 +592,11 @@ const AccountManagement = () => {
         console.log("No matching component for active page:", activePage);
         return <div>Page not found</div>;
     }
+  };
+
+  // Add toggleDarkMode function
+  const toggleDarkMode = () => {
+    setIsDarkMode(!isDarkMode);
   };
 
   return (
@@ -538,6 +656,40 @@ const AccountManagement = () => {
           </motion.div>
         )}
       </AnimatePresence>
+      
+      {/* Permission Error Notification */}
+      <AnimatePresence>
+        {permissionError && (
+          <motion.div 
+            variants={errorNotificationVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="fixed top-28 left-0 right-0 mx-auto max-w-4xl px-4 z-50"
+          >
+            <div className={`${
+              isDarkMode 
+                ? 'bg-amber-900/80 text-amber-100 border border-amber-800/50' 
+                : 'bg-amber-50/95 text-amber-700 border border-amber-200'
+            } p-4 rounded-xl flex items-center justify-between shadow-xl backdrop-blur-md`}>
+              <div className="flex items-center">
+                <Shield className="w-5 h-5 mr-3 flex-shrink-0" />
+                <p>{permissionError}</p>
+              </div>
+              <button 
+                onClick={clearPermissionError}
+                className={`p-1 rounded-full ${
+                  isDarkMode 
+                    ? 'hover:bg-amber-800/50 text-amber-200' 
+                    : 'hover:bg-amber-100 text-amber-500'
+                } transition-colors duration-200`}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
         <div className="flex flex-col lg:flex-row gap-6">
@@ -546,7 +698,7 @@ const AccountManagement = () => {
             setIsMenuOpen={setIsMenuOpen}
             userRole={userRole}
             activePage={activePage}
-            setActivePage={setActivePage}
+            setActivePage={handlePageChange}
             isDarkMode={isDarkMode}
             isApproved={approvalStatus}
           />

@@ -142,7 +142,7 @@ const NavBar = ({ isDarkMode, toggleDarkMode }) => {
                       }`}
                     >
                       <div 
-                        onClick={() => navigate("/settings")}
+                        onClick={() => navigate("/settings?page=profile")}
                         className={`flex items-center space-x-2 px-4 py-2 rounded-md cursor-pointer ${
                           isDarkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-700'
                         }`}
@@ -249,7 +249,7 @@ const NavBar = ({ isDarkMode, toggleDarkMode }) => {
                   </div>
                   <button 
                     onClick={() => {
-                      navigate("/settings");
+                      navigate("/settings?page=profile");
                       setIsMenuOpen(false);
                     }} 
                     className={`w-full ${

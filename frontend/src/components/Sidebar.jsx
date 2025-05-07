@@ -13,7 +13,6 @@ const Sidebar = ({ isMenuOpen, userRole, activePage, setActivePage, setIsMenuOpe
   const rolePages = {
     Customer: [
       { id: 'profile', label: 'My Profile', icon: User },
-      { id: 'stats', label: 'Fitness Stats', icon: ActivitySquare },
       { id: 'billing', label: 'Billing', icon: CreditCard },
       { id: 'settings', label: 'Settings', icon: Settings }
     ],
@@ -23,7 +22,6 @@ const Sidebar = ({ isMenuOpen, userRole, activePage, setActivePage, setIsMenuOpe
       { id: 'approvals', label: 'Approval Requests', icon: Clock },
       { id: 'billing', label: 'Billing Overview', icon: DollarSign },
       { id: 'billingActivity', label: 'Billing Activity', icon: BarChart },
-      { id: 'stats', label: 'Stats', icon: ActivitySquare },
       // { id: 'analytics', label: 'Analytics', icon: PieChart },
       { id: 'performance', label: 'Model Performance', icon: TrendingUp },
       { id: 'models', label: 'ML Models', icon: Brain },
@@ -31,7 +29,6 @@ const Sidebar = ({ isMenuOpen, userRole, activePage, setActivePage, setIsMenuOpe
     ],
     'AI Engineer': [
       { id: 'profile', label: 'My Profile', icon: User },
-      { id: 'stats', label: 'Stats', icon: ActivitySquare },
       { id: 'models', label: 'ML Models', icon: Brain },
       { id: 'performance', label: 'Model Performance', icon: TrendingUp },
       // { id: 'data', label: 'Training Data', icon: Database },
@@ -42,6 +39,12 @@ const Sidebar = ({ isMenuOpen, userRole, activePage, setActivePage, setIsMenuOpe
 
   // Get pages for current role, default to Customer if role not found
   const currentRolePages = rolePages[userRole] || rolePages.Customer;
+
+  // Handler for page navigation
+  const handlePageSelect = (pageId) => {
+    setActivePage(pageId);
+    if (window.innerWidth < 1024) setIsMenuOpen(false);
+  };
 
   return (
     <AnimatePresence>
@@ -88,10 +91,7 @@ const Sidebar = ({ isMenuOpen, userRole, activePage, setActivePage, setIsMenuOpe
             <motion.div
               key={page.id}
               whileHover={{ scale: 1.01 }}
-              onClick={() => {
-                setActivePage(page.id);
-                if (window.innerWidth < 1024) setIsMenuOpen(false);
-              }}
+              onClick={() => handlePageSelect(page.id)}
               className={`flex items-center space-x-3 px-4 py-3 rounded-lg cursor-pointer
                 ${activePage === page.id 
                   ? isDarkMode 

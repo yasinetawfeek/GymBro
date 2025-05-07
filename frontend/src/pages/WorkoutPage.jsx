@@ -1982,7 +1982,7 @@ const TrainingPage = () => {
   };
 
   const handleGoToSubscription = () => {
-    navigate('/settings', { state: { activePage: 'billing' } });
+    navigate('/settings?page=billing');
   };
 
   // --- Render ---

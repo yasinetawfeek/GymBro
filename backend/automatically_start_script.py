@@ -98,7 +98,7 @@ list_users = [
 
 
     {'username': 'First', 'password': 'First', 'email':'first.name@ufcfur_15_3.com', 'group': ai_engineer_group ,'surname':'Second', 'forename':'First', 'title':'Dr'},
-    {'username': 'Admin', 'password': 'Admin', 'email':'admin@ufcfur_15_3.com', 'group': admin_group ,'surname':'Admin', 'forename':'Admin', 'title':'Dr'}
+    {'username': 'Admin', 'password': 'Admin', 'email':'admin@ufcfur_15_3.com', 'group': admin_group ,'surname':'Admin', 'forename':'Admin', 'title':'Dr'},
     # {'username': 'Admin', 'password': 'Admin', 'email':'admin@ufcfur_15_3.com', 'group': admin_group ,'surname':'Admin', 'forename':'Admin', 'title':'Dr'}
     {'username': 'Dong2025', 'password': 'Dong2025', 'email':'Dong2025.name@ufcfur_15_3.com', 'group': admin_group ,'surname':'wu', 'forename':'Dong', 'title':'Dr'},
 
@@ -136,14 +136,15 @@ for user_instance in list_users:
 users = User.objects.filter(groups=admin_group, is_staff=False)
 for user in users:
     user.is_staff = True
-    user.is_approved = True
+    user.profile.is_approved = True
     user.save()
+    user.profile.save()
 
 #approve AI engineer users
-users = User.objects.filter(groups=ai_engineer_group, is_approved=False)
+users = User.objects.filter(groups=ai_engineer_group)
 for user in users:
-    user.is_approved = True
-    user.save()
+    user.profile.is_approved = True
+    user.profile.save()
 
 # Print permissions for debugging
 permissions = ai_engineer_group.permissions.all()

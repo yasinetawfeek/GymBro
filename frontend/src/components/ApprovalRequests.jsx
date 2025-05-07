@@ -12,6 +12,18 @@ const ApprovalRequests = ({ isDarkMode }) => {
   const [error, setError] = useState(null);
   const [processingUser, setProcessingUser] = useState(null);
   
+  // Get the role name from user object
+  const getUserRole = (user) => {
+    if (!user || !user.groups || !user.groups.length) return "No Role";
+    return user.groups[0].name;
+  };
+  
+  // Check if a user is an AI Engineer
+  const isAIEngineer = (user) => {
+    const role = getUserRole(user);
+    return role === 'AI Engineer';
+  };
+  
   const fetchPendingUsers = async () => {
     try {
       setLoading(true);
@@ -22,8 +34,13 @@ const ApprovalRequests = ({ isDarkMode }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      console.log("Pending approval users:", response.data);
-      setPendingUsers(response.data);
+      console.log("All pending approval users:", response.data);
+      
+      // Filter to only show AI Engineers
+      const aiEngineers = response.data.filter(isAIEngineer);
+      console.log("Filtered AI Engineer approval requests:", aiEngineers);
+      
+      setPendingUsers(aiEngineers);
     } catch (err) {
       console.error("Error fetching pending users:", err);
       setError("Failed to fetch pending approval requests");
@@ -74,12 +91,6 @@ const ApprovalRequests = ({ isDarkMode }) => {
     }
   };
   
-  // Get the role name from user object
-  const getUserRole = (user) => {
-    if (!user || !user.groups || !user.groups.length) return "No Role";
-    return user.groups[0].name;
-  };
-  
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -95,7 +106,7 @@ const ApprovalRequests = ({ isDarkMode }) => {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className={`text-2xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-          Pending Approval Requests
+          AI Engineer Approval Requests
         </h2>
         <button
           onClick={fetchPendingUsers}
@@ -133,8 +144,8 @@ const ApprovalRequests = ({ isDarkMode }) => {
           }`}
         >
           <CheckCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
-          <p className="text-lg font-medium">No pending approval requests</p>
-          <p className="text-sm mt-1 opacity-75">All users have been processed</p>
+          <p className="text-lg font-medium">No pending AI Engineer requests</p>
+          <p className="text-sm mt-1 opacity-75">All AI Engineer users have been processed</p>
         </motion.div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -158,11 +169,7 @@ const ApprovalRequests = ({ isDarkMode }) => {
                         ? 'bg-purple-900/40 text-purple-300' 
                         : 'bg-indigo-50 text-indigo-600'
                     }`}>
-                      {getUserRole(user) === 'AI Engineer' ? (
-                        <UserCheck className="w-5 h-5" />
-                      ) : (
-                        <Shield className="w-5 h-5" />
-                      )}
+                      <UserCheck className="w-5 h-5" />
                     </div>
                     <div className="ml-3">
                       <h3 className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
