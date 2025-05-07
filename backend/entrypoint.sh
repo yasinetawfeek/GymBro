@@ -4,12 +4,6 @@
 
 echo "Waiting for PostgreSQL to start..."
 
-# Install netcat if missing
-if ! command -v nc &> /dev/null; then
-    echo "Installing netcat..."
-    apt-get update && apt-get install -y netcat-openbsd
-fi
-
 ./Wait-for "$DB_HOST":"$DB_PORT"
 
 echo "Executing manage.py"
@@ -17,19 +11,13 @@ echo "Executing manage.py"
 # Check if we should reset the database before running the script
 if [ "$RESET_DB" = "true" ]; then
     echo "Resetting database as requested by RESET_DB flag"
+    # Remove any SQLite files (legacy cleanup)
+    find . -name "db.sqlite3" -type f -delete
     
-    # Drop and recreate the database schemas
-    python manage.py dbshell << EOF
-DROP SCHEMA public CASCADE;
-CREATE SCHEMA public;
-GRANT ALL ON SCHEMA public TO "$DB_USER";
-GRANT ALL ON SCHEMA public TO public;
-EOF
-    
-    # Apply migrations from scratch
-    python manage.py migrate
-    
-    # Clear any existing users
+    # For PostgreSQL, drop and recreate the database tables
+    python manage.py flush --no-input
+    # Force migrate with --run-syncdb to ensure tables are recreated
+    python manage.py migrate --run-syncdb
     python manage.py shell -c "from django.contrib.auth.models import User; User.objects.all().delete()"
 else
     # Create migrations if needed
