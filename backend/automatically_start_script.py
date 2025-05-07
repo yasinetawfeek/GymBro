@@ -16,7 +16,8 @@ from DESD_App.models import UserProfile
 
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
-from DESD_App.models import BillingRecord
+from DESD_App.models import BillingRecord, MLModel, ModelPerformanceMetric
+from django.utils import timezone
 from datetime import datetime, timedelta
 import random
 
@@ -186,3 +187,145 @@ else:
             )
 
     print(f"Created {BillingRecord.objects.count()} billing records for testing")
+
+# Generate ML model data for testing
+print("Generating ML model data for testing...")
+
+# Check if ML models already exist
+if MLModel.objects.count() > 0:
+    print(f"Found {MLModel.objects.count()} existing ML models, skipping model data generation")
+else:
+    # Define model templates
+    ml_models = [
+        # Workout Classification models
+        {
+            'name': 'WorkoutClassifier-Base',
+            'model_type': 'workout',
+            'version': '1.0.0',
+            'description': 'Base model for classifying different workout types',
+            'learning_rate': 0.001,
+            'epochs': 100,
+            'batch_size': 32,
+            'accuracy': 0.87,
+            'deployed': True
+        },
+        {
+            'name': 'WorkoutClassifier-Advanced',
+            'model_type': 'workout',
+            'version': '1.2.0',
+            'description': 'Advanced model with fine-tuned parameters for workout classification',
+            'learning_rate': 0.0005,
+            'epochs': 200,
+            'batch_size': 64,
+            'accuracy': 0.92,
+            'deployed': False
+        },
+        {
+            'name': 'WorkoutClassifier-Experimental',
+            'model_type': 'workout',
+            'version': '2.0.0-beta',
+            'description': 'Experimental model using transformer architecture',
+            'learning_rate': 0.0003,
+            'epochs': 150,
+            'batch_size': 16,
+            'accuracy': 0.89,
+            'deployed': False
+        },
+        
+        # Muscle Activation models
+        {
+            'name': 'MuscleGroupAnalyzer-Standard',
+            'model_type': 'muscle',
+            'version': '1.0.0',
+            'description': 'Standard model for muscle activation tracking',
+            'learning_rate': 0.001,
+            'epochs': 80,
+            'batch_size': 32,
+            'accuracy': 0.85,
+            'deployed': True
+        },
+        {
+            'name': 'MuscleGroupAnalyzer-Pro',
+            'model_type': 'muscle',
+            'version': '1.5.0',
+            'description': 'Professional model with improved accuracy for muscle group activation',
+            'learning_rate': 0.0008,
+            'epochs': 120,
+            'batch_size': 48,
+            'accuracy': 0.91,
+            'deployed': False
+        },
+        
+        # Pose Correction models (replacing Displacement Estimation Values)
+        {
+            'name': 'PoseCorrection-Base',
+            'model_type': 'pose',
+            'version': '1.0.0',
+            'description': 'Base model for form correction during workouts',
+            'learning_rate': 0.0012,
+            'epochs': 90,
+            'batch_size': 32,
+            'accuracy': 0.83,
+            'deployed': True
+        },
+        {
+            'name': 'PoseCorrection-Advanced',
+            'model_type': 'pose',
+            'version': '1.3.0',
+            'description': 'Advanced model for precise workout form correction',
+            'learning_rate': 0.0007,
+            'epochs': 150,
+            'batch_size': 32,
+            'accuracy': 0.89,
+            'deployed': False
+        },
+    ]
+    
+    # Create the models
+    for model_data in ml_models:
+        model = MLModel.objects.create(**model_data)
+        print(f"Created ML model: {model.name} ({model.get_model_type_display()})")
+    
+    print(f"Created {MLModel.objects.count()} ML models for testing")
+
+# Generate model performance metrics
+print("Generating model performance metrics for testing...")
+
+# Check if performance metrics already exist
+if ModelPerformanceMetric.objects.count() > 0:
+    print(f"Found {ModelPerformanceMetric.objects.count()} existing model performance metrics, skipping generation")
+else:
+    # Common workout types
+    workout_types = [0, 1, 12, 18]  # Barbell Bicep Curl, Bench Press, Plank, Squat
+    
+    # Create metrics for the past 30 days
+    today = timezone.now()
+    for day in range(30):
+        timestamp = today - timedelta(days=day)
+        
+        # Create multiple records per day with different workout types
+        for _ in range(random.randint(5, 15)):
+            workout_type = random.choice(workout_types)
+            
+            # Base confidence and metrics with some randomness
+            base_confidence = random.uniform(0.75, 0.95)
+            latency = random.randint(50, 250)
+            
+            ModelPerformanceMetric.objects.create(
+                timestamp=timestamp - timedelta(hours=random.randint(0, 23), minutes=random.randint(0, 59)),
+                model_version=f"1.{random.randint(0, 3)}.0",
+                workout_type=workout_type,
+                avg_prediction_confidence=base_confidence,
+                min_prediction_confidence=base_confidence * 0.85,
+                max_prediction_confidence=min(0.99, base_confidence * 1.15),
+                correction_magnitude_avg=random.uniform(0.02, 0.1),
+                stable_prediction_rate=random.uniform(0.8, 0.98),
+                avg_response_latency=latency,
+                processing_time_per_frame=random.randint(30, 60),
+                time_to_first_correction=random.randint(300, 800),
+                frame_processing_rate=random.uniform(20, 30),
+                cpu_usage=random.uniform(5, 25),
+                memory_usage=random.uniform(200, 600)
+            )
+    
+    print(f"Created {ModelPerformanceMetric.objects.count()} model performance metrics for testing")

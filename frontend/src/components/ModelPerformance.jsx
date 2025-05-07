@@ -172,8 +172,10 @@ const ModelPerformance = ({ isDarkMode }) => {
   };
 
   const formatTime = (ms) => {
+    // Round the milliseconds to nearest integer
+    ms = Math.round(ms);
     if (ms < 1000) return `${ms}ms`;
-    return `${(ms / 1000).toFixed(2)}s`;
+    return `${(ms / 1000).toFixed(1)}s`;
   };
 
   // Format workout type data for the bar chart
@@ -528,7 +530,7 @@ const ModelPerformance = ({ isDarkMode }) => {
           </div>
           <div className="flex items-baseline">
             <span className={`text-3xl font-light ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-              {metrics.summary ? formatTime(metrics.summary.avg_latency) : '0ms'}
+              {metrics.summary ? formatTime(Math.round(metrics.summary.avg_latency)) : '0ms'}
             </span>
             <span className={`ml-2 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
               latency
@@ -541,7 +543,7 @@ const ModelPerformance = ({ isDarkMode }) => {
               <div 
                 className={`${isDarkMode ? 'bg-pink-500' : 'bg-pink-600'} h-1.5 rounded-full`}
                 style={{ 
-                  width: `${Math.min((metrics.summary?.avg_latency || 0) / 200 * 100, 100)}%` 
+                  width: `${Math.min((Math.round(metrics.summary?.avg_latency) || 0) / 200 * 100, 100)}%` 
                 }}
               ></div>
             </div>
@@ -796,7 +798,7 @@ const ModelPerformance = ({ isDarkMode }) => {
                         boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
                         color: isDarkMode ? '#fff' : '#000'
                       }}
-                      formatter={(value) => [`${value}ms`, 'Latency']}
+                      formatter={(value) => [`${Math.round(value)}ms`, 'Latency']}
                       labelFormatter={(label) => `Time: ${label}`}
                     />
                     <Legend />
