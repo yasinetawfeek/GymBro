@@ -10,12 +10,17 @@ services:
       - RESET_DB=true  # Set to true if you want to reset the DB users during initialization
     depends_on:
       - db
+    restart: unless-stopped
     
   frontend:
     build:
       context: ./frontend  
     ports:
-      - "80:80"  
+      - "80:80"
+    depends_on:
+      - backend
+      - ai
+    restart: unless-stopped
 
   ai:
     build:
@@ -26,6 +31,13 @@ services:
       - backend
     environment:
       - FLASK_ENV=development
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
   db:
     image: postgres:latest 
@@ -37,7 +49,8 @@ services:
     ports:
       - "5432:5432"  
     volumes:
-      - postgres-data:/var/lib/postgresql/data  
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
 
 volumes:
   postgres-data:

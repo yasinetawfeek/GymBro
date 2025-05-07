@@ -23,14 +23,25 @@ FROM nginx:stable-alpine
 # Remove default Nginx website
 RUN rm -rf /usr/share/nginx/html/*
 
+# Install curl and wait-for-it script
+RUN apk add --no-cache curl bash
+ADD https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh /usr/local/bin/wait-for-it
+RUN chmod +x /usr/local/bin/wait-for-it
+
 # Copy build output from builder stage to Nginx's html directory
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
+# Create startup script
+RUN echo '#!/bin/sh\n\
+wait-for-it backend:8000 -t 60\n\
+wait-for-it ai:8001 -t 60\n\
+exec nginx -g "daemon off;"\n\
+' > /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
+
 # Expose port 80
 EXPOSE 80
 
-# Start Nginx in the foreground
-CMD ["nginx", "-g", "daemon off;"]
+ENTRYPOINT ["/docker-entrypoint.sh"]

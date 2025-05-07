@@ -99,8 +99,16 @@ class UserCreateSerializer(serializers.ModelSerializer):
         return data
     
     def create(self, validated_data):
+        # Extract profile fields that don't belong in User model
         group_name = validated_data.pop('group', None)
         is_approved = validated_data.pop('is_approved', False)
+        
+        # Extract profile-specific fields
+        title = validated_data.pop('title', None)
+        forename = validated_data.pop('forename', None)
+        surname = validated_data.pop('surname', None)
+        
+        # Create user with remaining fields
         user = User.objects.create_user(**validated_data)
         request = self.context.get('request')
 
@@ -116,6 +124,15 @@ class UserCreateSerializer(serializers.ModelSerializer):
                     user.profile.is_approved = is_approved
                 else:
                     user.profile.is_approved = True
+                
+                # Set the profile fields
+                if title:
+                    user.profile.title = title
+                if forename:
+                    user.profile.forename = forename
+                if surname:
+                    user.profile.surname = surname
+                    
                 user.profile.save()
                 
             except Group.DoesNotExist:
@@ -125,6 +142,15 @@ class UserCreateSerializer(serializers.ModelSerializer):
             group = Group.objects.get(name='Customer')
             user.groups.add(group)
             user.profile.is_approved = True
+            
+            # Set the profile fields
+            if title:
+                user.profile.title = title
+            if forename:
+                user.profile.forename = forename
+            if surname:
+                user.profile.surname = surname
+                
             user.profile.save()
 
         return user

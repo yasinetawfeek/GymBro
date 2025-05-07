@@ -140,7 +140,7 @@ class AccountManagementViewSet(viewsets.ModelViewSet):
     Admins can view, update, delete, create users.
     """
     permission_classes = [IsAuthenticated, IsAdminRole] # Only users with Admin role can access
-    queryset = User.objects.all()
+    queryset = User.objects.all().select_related('profile')
     serializer_class = UserCreateSerializer
 
     def destroy(self, request, *args, **kwargs):
@@ -245,6 +245,9 @@ class RegisterView(generics.CreateAPIView):
             data['is_approved'] = False
         else:
             data['is_approved'] = True
+        
+        # Ensure title, forename, and surname are processed (they're already handled by the serializer)
+        print(f"Registration with profile data: title={data.get('title', 'None')}, forename={data.get('forename', 'None')}, surname={data.get('surname', 'None')}")
             
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)

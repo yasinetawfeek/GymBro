@@ -1,23 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Search, Filter, User, Mail, Calendar, Activity, 
+  Search, Filter, User, Mail, 
   ChevronRight, X, CheckCircle, SlashIcon, UserPlus, 
   ArrowUpDown, RefreshCw, AlertCircle
 } from 'lucide-react';
 import axios from 'axios';
 import userService from '../services/userService';
 
-// Animation variants
-const fadeIn = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { 
-    opacity: 1, 
-    y: 0,
-    transition: { duration: 0.4 }
-  }
-};
-
+// Animation variants for table rows
 const tableRowVariant = {
   hidden: { opacity: 0, x: -20 },
   visible: { 
@@ -32,7 +23,7 @@ const tableRowVariant = {
   }
 };
 
-const UserManagement = ({ isDarkMode = true, onSelectUser, onDeleteUser, onSaveUser, onToggleApproval }) => {
+const UserManagement = ({ isDarkMode = true, onSelectUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isFiltering, setIsFiltering] = useState(false);
   const [filterRole, setFilterRole] = useState('All');
@@ -80,10 +71,30 @@ const UserManagement = ({ isDarkMode = true, onSelectUser, onDeleteUser, onSaveU
             isApproved = true;
           }
           
+          // Get user profile information directly from the user object
+          const title = user.title || '';
+          const forename = user.forename || user.first_name || '';
+          const surname = user.surname || user.last_name || '';
+          
+          // Create formatted full name with title if available
+          let fullName = user.username;
+          if (forename && surname) {
+            fullName = title ? `${title} ${forename} ${surname}` : `${forename} ${surname}`;
+          } else if (user.first_name && user.last_name) {
+            fullName = `${user.first_name} ${user.last_name}`;
+          }
+          
+          console.log("User data:", { 
+            id: user.id, 
+            username: user.username,
+            title, forename, surname,
+            fullName
+          });
+          
           return {
             id: user.id,
             username: user.username,
-            fullName: user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : user.username,
+            fullName,
             email: user.email || 'No email',
             rolename: user.groups && user.groups.length > 0 ? user.groups[0].name : 'Customer',
             memberSince: new Date(user.date_joined).toLocaleDateString(),
@@ -100,41 +111,6 @@ const UserManagement = ({ isDarkMode = true, onSelectUser, onDeleteUser, onSaveU
     } catch (err) {
       console.error("Error fetching users:", err);
       setError("Failed to load users. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDeleteUser = async (userId) => {
-    try {
-      setIsLoading(true);
-      await userService.deleteUser(userId);
-      setUsers(users.filter(user => user.id !== userId));
-      
-      if (onDeleteUser) {
-        onDeleteUser(userId);
-      }
-    } catch (error) {
-      console.error("Error deleting user:", error);
-      setError("Failed to delete user. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleUserUpdate = async (updatedUser) => {
-    try {
-      setIsLoading(true);
-      // Format user data for backend if needed
-      const response = await userService.updateUser(updatedUser.id, updatedUser);
-      setUsers(users.map(user => user.id === updatedUser.id ? {...user, ...updatedUser} : user));
-      
-      if (onSaveUser) {
-        onSaveUser(updatedUser);
-      }
-    } catch (error) {
-      console.error("Error updating user:", error);
-      setError("Failed to update user. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -160,12 +136,6 @@ const UserManagement = ({ isDarkMode = true, onSelectUser, onDeleteUser, onSaveU
       ));
       
       console.log(`User ${action} successfully`);
-      
-      // If onSaveUser is provided, call it with updated user
-      const updatedUser = users.find(user => user.id === userId);
-      if (updatedUser && onSaveUser) {
-        onSaveUser({...updatedUser, isApproved});
-      }
       
     } catch (error) {
       console.error(`Error ${isApproved ? 'approving' : 'rejecting'} user:`, error);
@@ -471,10 +441,17 @@ const UserManagement = ({ isDarkMode = true, onSelectUser, onDeleteUser, onSaveU
                         isDarkMode ? 'text-purple-400' : 'text-purple-600'
                       }`} />
                     </div>
-                    <div className={`font-medium truncate ${
-                      isDarkMode ? 'text-white' : 'text-gray-800'
-                    }`}>
-                      {user.username}
+                    <div>
+                      <div className={`font-medium ${
+                        isDarkMode ? 'text-white' : 'text-gray-800'
+                      }`}>
+                        {user.fullName}
+                      </div>
+                      <div className={`text-xs ${
+                        isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                      }`}>
+                        @{user.username}
+                      </div>
                     </div>
                   </div>
                   
@@ -552,7 +529,7 @@ const UserManagement = ({ isDarkMode = true, onSelectUser, onDeleteUser, onSaveU
                         }`}
                         onClick={(e) => {
                           e.stopPropagation();
-                          onToggleApproval(user.id, !user.isApproved);
+                          handleToggleApproval(user.id, !user.isApproved);
                         }}
                       >
                         {user.isApproved ? 'Revoke' : 'Grant'}
@@ -561,6 +538,18 @@ const UserManagement = ({ isDarkMode = true, onSelectUser, onDeleteUser, onSaveU
                   </div>
                   
                   <div className="col-span-1 flex justify-end">
+                    <button
+                      className={`control-button mr-2 ${
+                        isDarkMode ? 'text-gray-400 hover:text-purple-400' : 'text-gray-500 hover:text-purple-600'
+                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleApproval(user.id, !user.isApproved);
+                      }}
+                      title={user.isApproved ? 'Revoke Access' : 'Grant Access'}
+                    >
+                      {user.isApproved ? <SlashIcon className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                    </button>
                     <ChevronRight className={`w-4 h-4 ${
                       isDarkMode ? 'text-gray-400' : 'text-gray-500'
                     }`} />
@@ -570,21 +559,13 @@ const UserManagement = ({ isDarkMode = true, onSelectUser, onDeleteUser, onSaveU
             </motion.div>
           ) : (
             <motion.div 
-              initial={{ opacity: 0 }}
+              initial={{ opacity: 1 }}
               animate={{ opacity: 1 }}
-              className={`py-16 text-center ${
-                isDarkMode ? 'text-gray-400' : 'text-gray-500'
-              }`}
+              className="flex justify-center items-center py-20"
             >
-              <div className="flex flex-col items-center">
-                <Search className="w-10 h-10 mb-3 opacity-20" />
-                <p className="mb-2 text-lg">No users found</p>
-                <p className="text-sm opacity-70">
-                  {searchTerm 
-                    ? `No matches for "${searchTerm}"` 
-                    : 'Try adjusting your filters'}
-                </p>
-              </div>
+              <span className={`text-sm ${
+                isDarkMode ? 'text-gray-300' : 'text-gray-600'
+              }`}>No users found.</span>
             </motion.div>
           )}
         </AnimatePresence>
