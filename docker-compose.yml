@@ -37,7 +37,8 @@ services:
     ports:
       - "5432:5432"  
     volumes:
-      - postgres-data:/var/lib/postgresql/data  
+      - ./reset-db.sh:/docker-entrypoint-initdb.d/reset-db.sh
+      # - postgres-data:/var/lib/postgresql/data  
 
 volumes:
   postgres-data:
