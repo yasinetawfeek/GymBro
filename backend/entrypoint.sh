@@ -11,8 +11,11 @@ echo "Executing manage.py"
 # Check if we should reset the database before running the script
 if [ "$RESET_DB" = "true" ]; then
     echo "Resetting database as requested by RESET_DB flag"
-    # Find and delete all SQLite database files
+    # Remove any SQLite files (legacy cleanup)
     find . -name "db.sqlite3" -type f -delete
+    
+    # For PostgreSQL, drop and recreate the database tables
+    python manage.py flush --no-input
     # Force migrate with --run-syncdb to ensure tables are recreated
     python manage.py migrate --run-syncdb
     python manage.py shell -c "from django.contrib.auth.models import User; User.objects.all().delete()"
