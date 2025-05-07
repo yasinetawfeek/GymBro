@@ -1,0 +1,45 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Jupyter notebooks (build container doesn't need these)
+*.ipynb
+.ipynb_checkpoints/
+
+# Models and data (consider excluding large files that aren't needed for runtime)
+# Uncomment if you don't need these files in your container:
+# model_checkpoints/*
+# data/*
+# Only include if not needed for runtime
+pose_landmarker_full.task
+
+# Documentation
+README.md
+*.md
+
+# Log files
+*.log
+
+# Test files
+test.py
+*_test.py 
