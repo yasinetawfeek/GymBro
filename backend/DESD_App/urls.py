@@ -14,6 +14,7 @@ router.register(r'subscriptions', SubscriptionViewSet, basename='subscription') 
 router.register(r'usage', UsageTrackingViewSet, basename='usage')
 router.register(r'model-performance', ModelPerformanceViewSet, basename='model-performance')
 router.register(r'ml-models', MLModelViewSet, basename='ml-models')
+router.register(r'last-viewed-exercise', UserLastViewedExerciseViewSet, basename='last-viewed-exercise')
 
 # urlpatterns = router.urls
 

@@ -22,8 +22,8 @@ from dotenv import load_dotenv
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.db.models import Count, Sum, Avg, Max, Min
-from .models import UsageRecord, ModelPerformanceMetric, MLModel
-from .serializers import UsageRecordSerializer, ModelPerformanceMetricSerializer, MLModelSerializer
+from .models import UsageRecord, ModelPerformanceMetric, MLModel, UserLastViewedExercise
+from .serializers import UsageRecordSerializer, ModelPerformanceMetricSerializer, MLModelSerializer, UserLastViewedExerciseSerializer
 
 # Load environment variables
 load_dotenv()
@@ -767,14 +767,46 @@ class UsageTrackingViewSet(viewsets.ModelViewSet):
         # Get optional workout type
         workout_type = request.data.get('workout_type', 0)
         
+        # Ensure platform value doesn't exceed max_length
+        platform = request.data.get('platform', '')
+        if platform and len(platform) > 50:
+            platform = platform[:50]  # Truncate to 50 characters
+        
         # Create a new session record
         session = UsageRecord.objects.create(
             user=user,
             workout_type=workout_type,
             subscription_plan=user.subscription.plan if hasattr(user, 'subscription') else '',
             client_ip=self.get_client_ip(request),
-            platform=request.data.get('platform', '')
+            platform=platform
         )
+        
+        # Update last viewed exercise
+        if workout_type is not None:
+            # Look up workout name from mapping if provided
+            workout_name = None
+            workout_map = request.data.get('workout_map', {})
+            
+            # Convert workout_type to string for consistent lookup
+            workout_type_str = str(workout_type)
+            print(f"Looking for workout name for type {workout_type_str} in workout_map: {workout_map}")
+            
+            if workout_type_str in workout_map:
+                workout_name = workout_map[workout_type_str]
+                print(f"Found workout name: {workout_name}")
+            else:
+                print(f"No workout name found for type {workout_type_str}. Available keys: {list(workout_map.keys())}")
+                # Fall back to using workout type as a number
+                workout_name = f"Workout {workout_type}"
+            
+            # Update or create the last viewed exercise
+            UserLastViewedExercise.objects.update_or_create(
+                user=user,
+                defaults={
+                    'workout_type': workout_type,
+                    'workout_name': workout_name
+                }
+            )
         
         return Response({
             'session_id': session.session_id,
@@ -817,6 +849,31 @@ class UsageTrackingViewSet(viewsets.ModelViewSet):
             # Update workout_type if provided
             if workout_type is not None:
                 session.workout_type = workout_type
+                
+                # Update last viewed exercise when workout type changes
+                workout_name = None
+                workout_map = request.data.get('workout_map', {})
+                
+                # Convert workout_type to string for consistent lookup
+                workout_type_str = str(workout_type)
+                print(f"End session: Looking for workout name for type {workout_type_str} in workout_map: {workout_map}")
+                
+                if workout_type_str in workout_map:
+                    workout_name = workout_map[workout_type_str]
+                    print(f"End session: Found workout name: {workout_name}")
+                else:
+                    print(f"End session: No workout name found for type {workout_type_str}. Available keys: {list(workout_map.keys())}")
+                    # Fall back to using workout type as a number
+                    workout_name = f"Workout {workout_type}"
+                
+                # Update or create the last viewed exercise
+                UserLastViewedExercise.objects.update_or_create(
+                    user=request.user,
+                    defaults={
+                        'workout_type': workout_type,
+                        'workout_name': workout_name
+                    }
+                )
             
             # Mark session as inactive (completed)
             session.is_active = False
@@ -938,6 +995,31 @@ class UsageTrackingViewSet(viewsets.ModelViewSet):
             if workout_type is not None:
                 session.workout_type = workout_type
                 print(f"Updating workout type to {workout_type}")
+                
+                # Update last viewed exercise when workout type changes
+                workout_name = None
+                workout_map = request.data.get('workout_map', {})
+                
+                # Convert workout_type to string for consistent lookup
+                workout_type_str = str(workout_type)
+                print(f"Looking for workout name for type {workout_type_str} in workout_map: {workout_map}")
+                
+                if workout_type_str in workout_map:
+                    workout_name = workout_map[workout_type_str]
+                    print(f"Found workout name: {workout_name}")
+                else:
+                    print(f"No workout name found for type {workout_type_str}. Available keys: {list(workout_map.keys())}")
+                    # Fall back to using workout type as a number
+                    workout_name = f"Workout {workout_type}"
+                
+                # Update or create the last viewed exercise
+                UserLastViewedExercise.objects.update_or_create(
+                    user=request.user,
+                    defaults={
+                        'workout_type': workout_type,
+                        'workout_name': workout_name
+                    }
+                )
             
             # Ensure we're marked as active
             session.is_active = True
@@ -1013,29 +1095,57 @@ class UsageTrackingViewSet(viewsets.ModelViewSet):
                 workout_type = request.data.get('workout_type', 0)
                 duration = request.data.get('session_duration', 0)
                 
+                # Ensure platform value doesn't exceed max_length
+                platform = request.data.get('platform', '')
+                if platform and len(platform) > 50:
+                    platform = platform[:50]  # Truncate to 50 characters
+                
                 new_session = UsageRecord.objects.create(
                     user=request.user,
                     frames_processed=request.data.get('frames_processed', 0),
                     corrections_sent=request.data.get('corrections_sent', 0),
                     total_duration=duration,
                     workout_type=workout_type,
-                    is_active=True
+                    is_active=True,
+                    platform=platform
                 )
                 
-                # print(f"[METRICS DEBUG] ✅ Created new session: {new_session.session_id}")
+                # Also update last viewed exercise when creating a new session
+                if workout_type is not None:
+                    # Look up workout name from mapping if provided
+                    workout_name = None
+                    workout_map = request.data.get('workout_map', {})
+                    
+                    # Convert workout_type to string for consistent lookup
+                    workout_type_str = str(workout_type)
+                    print(f"New session: Looking for workout name for type {workout_type_str} in workout_map: {workout_map}")
+                    
+                    if workout_type_str in workout_map:
+                        workout_name = workout_map[workout_type_str]
+                        print(f"New session: Found workout name: {workout_name}")
+                    else:
+                        print(f"New session: No workout name found for type {workout_type_str}. Available keys: {list(workout_map.keys())}")
+                        # Fall back to using workout type as a number
+                        workout_name = f"Workout {workout_type}"
+                    
+                    # Update or create the last viewed exercise
+                    UserLastViewedExercise.objects.update_or_create(
+                        user=request.user,
+                        defaults={
+                            'workout_type': workout_type,
+                            'workout_name': workout_name
+                        }
+                    )
                 
-                # Also create initial performance metrics for admin/AI engineer users
+                # Create initial performance metrics for admin/AI engineer users
                 user = request.user
                 user_groups = user.groups.all()
                 group_names = [group.name for group in user_groups]
                 is_admin = 'Admin' in group_names
                 is_ai_engineer = 'AI Engineer' in group_names
                 
-                # print(f"[METRICS DEBUG] User groups for new session: {group_names}")
-                
                 if is_admin or is_ai_engineer:
                     try:
-                        # print(f"[METRICS DEBUG] 📊 Creating initial performance metric for new session")
                         # Create initial performance metrics with reasonable values
                         from django.utils import timezone
                         
@@ -1053,12 +1163,8 @@ class UsageTrackingViewSet(viewsets.ModelViewSet):
                             frame_processing_rate=20,
                             timestamp=timezone.now()     # Explicitly set the timestamp
                         )
-                        # print(f"[METRICS DEBUG] ✅ Created initial performance metric ID: {metric.id}")
                     except Exception as e:
-                        # print(f"[METRICS DEBUG] ❌ Error creating initial performance metric: {e}")
                         pass
-                # else:
-                    # print(f"[METRICS DEBUG] ⚠️ User is not admin or AI engineer, skipping initial performance metrics")
                 
                 return Response({
                     'status': 'new session created',
@@ -1411,6 +1517,95 @@ class MLModelViewSet(viewsets.ModelViewSet):
             }
         
         return Response(results)
+
+class UserLastViewedExerciseViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for tracking and retrieving the last viewed exercise/workout for a user.
+    """
+    serializer_class = UserLastViewedExerciseSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """
+        Return the last viewed exercise for the authenticated user only
+        """
+        return UserLastViewedExercise.objects.filter(user=self.request.user)
+    
+    @action(detail=False, methods=['get'])
+    def my_last_viewed(self, request):
+        """Get the current user's last viewed exercise"""
+        try:
+            last_viewed = UserLastViewedExercise.objects.get(user=request.user)
+            serializer = self.get_serializer(last_viewed)
+            return Response(serializer.data)
+        except UserLastViewedExercise.DoesNotExist:
+            # If no record exists, return empty data
+            return Response({
+                'workout_type': None,
+                'workout_name': None,
+                'last_viewed_at': None
+            })
+    
+    @action(detail=False, methods=['post'])
+    def update_last_viewed(self, request):
+        """Update the current user's last viewed exercise"""
+        workout_type = request.data.get('workout_type')
+        workout_name = request.data.get('workout_name')
+        
+        if workout_type is None:
+            return Response({'error': 'workout_type is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Default workout name mapping
+        default_workout_map = { 
+            "0": "Barbell Bicep Curl", 
+            "1": "Bench Press", 
+            "2": "Chest Fly Machine", 
+            "3": "Deadlift",
+            "4": "Decline Bench Press", 
+            "5": "Hammer Curl", 
+            "6": "Hip Thrust", 
+            "7": "Incline Bench Press", 
+            "8": "Lat Pulldown", 
+            "9": "Lateral Raises", 
+            "10": "Leg Extensions", 
+            "11": "Leg Raises",
+            "12": "Plank", 
+            "13": "Pull Up", 
+            "14": "Push Ups", 
+            "15": "Romanian Deadlift", 
+            "16": "Russian Twist", 
+            "17": "Shoulder Press", 
+            "18": "Squat", 
+            "19": "T Bar Row", 
+            "20": "Tricep Dips", 
+            "21": "Tricep Pushdown"
+        }
+        
+        # If workout_name isn't provided, try to use the default mapping
+        if not workout_name:
+            workout_type_str = str(workout_type)
+            if workout_type_str in default_workout_map:
+                workout_name = default_workout_map[workout_type_str]
+            else:
+                workout_name = f"Workout {workout_type}"
+        
+        # Get or create the last viewed record
+        last_viewed, created = UserLastViewedExercise.objects.get_or_create(
+            user=request.user,
+            defaults={
+                'workout_type': workout_type,
+                'workout_name': workout_name
+            }
+        )
+        
+        # If record already existed, update it
+        if not created:
+            last_viewed.workout_type = workout_type
+            last_viewed.workout_name = workout_name
+            last_viewed.save()
+        
+        serializer = self.get_serializer(last_viewed)
+        return Response(serializer.data)
 
 
 

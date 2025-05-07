@@ -18,10 +18,134 @@ import {
   CheckCircle,
   ChevronRight,
   Star,
-  Dumbbell
+  Dumbbell,
+  Clock
 } from 'lucide-react';
 import NavBar from '../components/Navbar';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { lastViewedExerciseService } from '../services/apiService';
+
+// Import workoutMap for proper workout names
+// This is the same map used in WorkoutPage.jsx
+const workoutMap = { 
+  0: "Barbell Bicep Curl", 
+  1: "Bench Press", 
+  2: "Chest Fly Machine", 
+  3: "Deadlift",
+  4: "Decline Bench Press", 
+  5: "Hammer Curl", 
+  6: "Hip Thrust", 
+  7: "Incline Bench Press", 
+  8: "Lat Pulldown", 
+  9: "Lateral Raises", 
+  10: "Leg Extensions", 
+  11: "Leg Raises",
+  12: "Plank", 
+  13: "Pull Up", 
+  14: "Push Ups", 
+  15: "Romanian Deadlift", 
+  16: "Russian Twist", 
+  17: "Shoulder Press", 
+  18: "Squat", 
+  19: "T Bar Row", 
+  20: "Tricep Dips", 
+  21: "Tricep Pushdown"
+};
+
+// Last Viewed Exercise Component
+const LastViewedExercise = ({ isDarkMode }) => {
+  const [lastViewed, setLastViewed] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    // Only fetch data if user is logged in
+    if (user) {
+      setLoading(true);
+      lastViewedExerciseService.getLastViewed()
+        .then(response => {
+          setLastViewed(response.data);
+          setLoading(false);
+        })
+        .catch(error => {
+          console.error('Error fetching last viewed exercise:', error);
+          setLoading(false);
+        });
+    }
+  }, [user]);
+
+  // If user is not logged in or there's no last viewed exercise
+  if (!user || (lastViewed && !lastViewed.workout_type)) {
+    return null;
+  }
+  
+  // Helper function to get proper workout name
+  const getWorkoutName = (workout) => {
+    // First try to use the workout_name from the API response
+    if (workout?.workout_name && !workout.workout_name.startsWith('Workout')) {
+      return workout.workout_name;
+    }
+    
+    // If that's not available or is generic, use the workoutMap with the workout_type
+    if (workout?.workout_type !== undefined && workoutMap[workout.workout_type]) {
+      return workoutMap[workout.workout_type];
+    }
+    
+    // Fallback to a generic name
+    return workout?.workout_name || `Workout #${workout?.workout_type}`;
+  };
+
+  const handleTrainNow = () => {
+    navigate('/workout');
+  };
+
+  return (
+    <motion.section 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6 }}
+      className={`py-8 ${isDarkMode ? 'bg-gray-800' : 'bg-indigo-50'}`}
+    >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className={`${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'} rounded-xl shadow-lg border p-6`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className={`${isDarkMode ? 'bg-purple-500' : 'bg-indigo-500'} p-3 rounded-full`}>
+                <Clock className="text-white" size={24} />
+              </div>
+              <div>
+                <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Last Viewed Exercise
+                </h3>
+                {loading ? (
+                  <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Loading...</p>
+                ) : (
+                  <p className={`text-xl font-bold ${isDarkMode ? 'text-purple-400' : 'text-indigo-600'}`}>
+                    {getWorkoutName(lastViewed)}
+                  </p>
+                )}
+                <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {lastViewed?.last_viewed_at ? new Date(lastViewed.last_viewed_at).toLocaleString() : ''}
+                </p>
+              </div>
+            </div>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleTrainNow}
+              className={`${isDarkMode ? 'bg-purple-600 hover:bg-purple-700' : 'bg-indigo-600 hover:bg-indigo-700'} px-4 py-2 rounded-lg text-white font-medium flex items-center space-x-2`}
+            >
+              <span>Train Now</span>
+              <Dumbbell size={18} />
+            </motion.button>
+          </div>
+        </div>
+      </div>
+    </motion.section>
+  );
+};
 
 // Animation variants
 const fadeIn = {
@@ -582,11 +706,16 @@ const FloatingDumbbellButton = ({ isDarkMode, navigate }) => {
 const HomePage = () => {
   const navigate = useNavigate();
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const { user, logout } = useAuth();
   
-  // Check system preference on initial load
+  // Check for preferred color scheme from localStorage or system preferences
   useEffect(() => {
-    const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    setIsDarkMode(prefersDarkMode);
+    const savedDarkMode = localStorage.getItem('darkMode');
+    if (savedDarkMode) {
+      setIsDarkMode(savedDarkMode === 'true');
+    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      setIsDarkMode(true);
+    }
   }, []);
 
   // Update dark mode class on body
@@ -600,11 +729,11 @@ const HomePage = () => {
   
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
+    localStorage.setItem('darkMode', !isDarkMode);
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
+    logout();
     navigate('/auth');
   };
   
@@ -615,8 +744,9 @@ const HomePage = () => {
       <NavBar isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />
       <main>
         <Hero isDarkMode={isDarkMode}/>
-        <HowItWorks isDarkMode={isDarkMode}/>
+        {user && <LastViewedExercise isDarkMode={isDarkMode} />}
         <Features isDarkMode={isDarkMode}/>
+        <HowItWorks isDarkMode={isDarkMode}/>
         <Testimonials isDarkMode={isDarkMode}/>
         <Stats isDarkMode={isDarkMode}/>
       </main>

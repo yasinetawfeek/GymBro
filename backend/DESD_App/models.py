@@ -259,3 +259,18 @@ class MLModel(models.Model):
     
     def __str__(self):
         return f"{self.name} ({self.get_model_type_display()})"
+
+class UserLastViewedExercise(models.Model):
+    """
+    Tracks the last viewed exercise/workout for each user
+    """
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='last_viewed_exercise')
+    workout_type = models.IntegerField(default=0)
+    workout_name = models.CharField(max_length=100, blank=True, null=True)
+    last_viewed_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-last_viewed_at']
+        
+    def __str__(self):
+        return f"{self.user.username}'s last viewed exercise: {self.workout_name}"

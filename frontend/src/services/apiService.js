@@ -71,9 +71,19 @@ const usageService = {
   }
 };
 
+const lastViewedExerciseService = {
+  getLastViewed: async () => {
+    return apiClient.get('api/last-viewed-exercise/my_last_viewed/');
+  },
+  updateLastViewed: async (exerciseData) => {
+    return apiClient.post('api/last-viewed-exercise/update_last_viewed/', exerciseData);
+  }
+};
+
 export {
   apiClient,
   subscriptionService,
   invoiceService,
-  usageService
+  usageService,
+  lastViewedExerciseService
 }; 
