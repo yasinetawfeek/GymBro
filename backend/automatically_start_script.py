@@ -72,9 +72,9 @@ customer_group, created = Group.objects.get_or_create(name='Customer')
 
 
 # Create users with safeguards
-staff_user = create_user_if_not_exists('Dong2025', 'Dong2025', groups=[admin_group])
-ChatGPT = create_user_if_not_exists('ChatGPT', 'ChatGPT', groups=[ai_engineer_group])
-staff_two = create_user_if_not_exists('Yahia2025', 'Yahia2025', groups=[admin_group])
+# staff_user = create_user_if_not_exists('Dong2025', 'Dong2025', groups=[admin_group])
+# ChatGPT = create_user_if_not_exists('ChatGPT', 'ChatGPT', groups=[ai_engineer_group])
+# staff_two = create_user_if_not_exists('Yahia2025', 'Yahia2025', groups=[admin_group])
 # Admin_user = create_user_if_not_exists('Admin', 'Admin', email='admin@ufcfur_15_3.com', groups=[admin_group])
 # First_name = create_user_if_not_exists('First', 'First', email='first.name@ufcfur_15_3.com', groups=[ai_engineer_group])
 # Tensa_name = create_user_if_not_exists('Tensa', 'Tensa', email='tensa.flow@ufcfur_15_3.com', groups=[ai_engineer_group])
@@ -99,10 +99,11 @@ list_users = [
 
     {'username': 'First', 'password': 'First', 'email':'first.name@ufcfur_15_3.com', 'group': ai_engineer_group ,'surname':'Second', 'forename':'First', 'title':'Dr'},
     {'username': 'Admin', 'password': 'Admin', 'email':'admin@ufcfur_15_3.com', 'group': admin_group ,'surname':'Admin', 'forename':'Admin', 'title':'Dr'}
+    # {'username': 'Admin', 'password': 'Admin', 'email':'admin@ufcfur_15_3.com', 'group': admin_group ,'surname':'Admin', 'forename':'Admin', 'title':'Dr'}
+    {'username': 'Dong2025', 'password': 'Dong2025', 'email':'Dong2025.name@ufcfur_15_3.com', 'group': admin_group ,'surname':'wu', 'forename':'Dong', 'title':'Dr'},
 
 
 ]
-
 
 
 
@@ -135,6 +136,13 @@ for user_instance in list_users:
 users = User.objects.filter(groups=admin_group, is_staff=False)
 for user in users:
     user.is_staff = True
+    user.is_approved = True
+    user.save()
+
+#approve AI engineer users
+users = User.objects.filter(groups=ai_engineer_group, is_approved=False)
+for user in users:
+    user.is_approved = True
     user.save()
 
 # Print permissions for debugging
