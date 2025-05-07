@@ -167,7 +167,7 @@ const staggerContainer = {
   }
 };
 
-const Hero = ({ isDarkMode }) => {
+const Hero = ({ isDarkMode, navigate }) => {
   return (
     <section className={`pt-32 pb-24 bg-gradient-to-br ${isDarkMode ? 'from-gray-900 via-gray-800 to-indigo-900' : 'from-indigo-50 via-white to-indigo-100'}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -198,6 +198,7 @@ const Hero = ({ isDarkMode }) => {
               className={`bg-gradient-to-r ${isDarkMode ? 'from-purple-500 to-indigo-600' : 'from-indigo-500 to-purple-600'} text-white font-medium py-3 px-8 rounded-lg shadow-lg hover:shadow-xl transition duration-300 flex items-center justify-center space-x-2`}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
+              onClick={() => navigate('/workout')}
             >
               <span>Get Started</span>
               <ArrowRight size={18} />
@@ -207,6 +208,7 @@ const Hero = ({ isDarkMode }) => {
               className={`bg-transparent ${isDarkMode ? 'hover:bg-white/10 text-white border-white/30' : 'hover:bg-indigo-50 text-indigo-600 border-indigo-200'} font-medium py-3 px-8 rounded-lg border transition duration-300 flex items-center justify-center space-x-2`}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
+              onClick={() => window.open('https://youtu.be/b1T-nO1Q60M', '_blank')}
             >
               <Play size={18} />
               <span>Watch Demo</span>
@@ -706,16 +708,11 @@ const FloatingDumbbellButton = ({ isDarkMode, navigate }) => {
 const HomePage = () => {
   const navigate = useNavigate();
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const { user, logout } = useAuth();
   
-  // Check for preferred color scheme from localStorage or system preferences
+  // Check system preference on initial load
   useEffect(() => {
-    const savedDarkMode = localStorage.getItem('darkMode');
-    if (savedDarkMode) {
-      setIsDarkMode(savedDarkMode === 'true');
-    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      setIsDarkMode(true);
-    }
+    const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    setIsDarkMode(prefersDarkMode);
   }, []);
 
   // Update dark mode class on body
@@ -729,11 +726,11 @@ const HomePage = () => {
   
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
-    localStorage.setItem('darkMode', !isDarkMode);
   };
 
   const handleLogout = () => {
-    logout();
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
     navigate('/auth');
   };
   
@@ -743,10 +740,9 @@ const HomePage = () => {
     }`}>
       <NavBar isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />
       <main>
-        <Hero isDarkMode={isDarkMode}/>
-        {user && <LastViewedExercise isDarkMode={isDarkMode} />}
-        <Features isDarkMode={isDarkMode}/>
+        <Hero isDarkMode={isDarkMode} navigate={navigate}/>
         <HowItWorks isDarkMode={isDarkMode}/>
+        <Features isDarkMode={isDarkMode}/>
         <Testimonials isDarkMode={isDarkMode}/>
         <Stats isDarkMode={isDarkMode}/>
       </main>
