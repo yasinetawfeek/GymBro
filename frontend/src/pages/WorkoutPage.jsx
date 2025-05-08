@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext'; // Add this import
 import { subscriptionService, usageService, lastViewedExerciseService } from '../services/apiService';
 import axios from 'axios';
-import { API_URL } from '../config';
+import { API_URL, AI_URL } from '../config';
 
 // Lucide icons for a more consistent look
 import { 
@@ -1201,9 +1201,9 @@ const TrainingPage = () => {
         console.log('[Socket Setup] No auth token available');
       }
       
-      console.log('[Socket Setup] Connecting to WebSocket server at http://localhost:8001');
+      console.log(`[Socket Setup] Connecting to WebSocket server at ${AI_URL}`);
       try {
-        socketRef.current = io('http://localhost:8001', socketOptions);
+        socketRef.current = io(AI_URL, socketOptions);
         
         socketRef.current.on('connect', () => { 
           console.log('[Socket Status] WebSocket connected successfully. Socket ID:', socketRef.current?.id); 

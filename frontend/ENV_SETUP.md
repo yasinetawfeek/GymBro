@@ -10,26 +10,28 @@ This project uses environment variables to configure the API URL. This allows fo
 
 ```
 VITE_API_URL=http://localhost:8000
+VITE_AI_URL=http://localhost:8001
 ```
 
 2. Restart your development server for the changes to take effect.
 
 ### Production
 
-In production environments, you can set the `VITE_API_URL` environment variable to point to your production API.
+In production environments, you can set the `VITE_API_URL` and `VITE_AI_URL` environment variables to point to your production APIs.
 
 ## How It Works
 
-The application uses a configuration file (`src/config.js`) that reads the environment variable:
+The application uses a configuration file (`src/config.js`) that reads the environment variables:
 
 ```javascript
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+export const AI_URL = import.meta.env.VITE_AI_URL || 'http://localhost:8001';
 ```
 
 This means:
-- If `VITE_API_URL` is set, it will be used
-- If not, it falls back to 'http://localhost:8000'
+- If the environment variables are set, they will be used
+- If not, they fall back to the default localhost URLs
 
 ## Docker Environment
 
-When running the application in Docker, you can set the environment variable in your docker-compose.yml or Dockerfile. 
+When running the application in Docker, you can set the environment variables in your docker-compose.yml or Dockerfile. 

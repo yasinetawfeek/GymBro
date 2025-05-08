@@ -41,7 +41,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/env-replace.sh && \
 
 # Create the env-config.template.js file
 RUN mkdir -p /usr/share/nginx/html/assets && \
-    echo "window._env_ = { VITE_API_URL: '${VITE_API_URL:-http://localhost:8000}' };" > /usr/share/nginx/html/assets/env-config.template.js
+    echo "window._env_ = { VITE_API_URL: '${VITE_API_URL:-http://localhost:8000}', VITE_AI_URL: '${VITE_AI_URL:-http://localhost:8001}' };" > /usr/share/nginx/html/assets/env-config.template.js
 
 # Create startup script
 RUN echo '#!/bin/sh' > /docker-entrypoint.sh && \

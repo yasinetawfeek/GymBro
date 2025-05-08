@@ -166,7 +166,7 @@ performance_metrics = {}
 model_version = "1.0.0"  # Update this when you deploy new models
 
 # Initialize API endpoint URLs
-BACKEND_BASE_URL = 'http://localhost:8000'
+BACKEND_BASE_URL = os.environ.get('BACKEND_URL', 'http://localhost:8000')
 USAGE_ENDPOINT = f"{BACKEND_BASE_URL}/api/usage/"
 PERFORMANCE_ENDPOINT = f"{BACKEND_BASE_URL}/api/model-performance/"
 
@@ -430,7 +430,7 @@ def report_performance_metrics(client_id, is_final=False):
             # First check if the user has admin or ML expert role before trying to send metrics
             # This avoids users getting 403 errors which could affect their experience
             role_check_response = requests.get(
-                "http://localhost:8000/api/role-info/",
+                f"{BACKEND_BASE_URL}/api/role-info/",
                 headers={"Authorization": f"Bearer {token}"},
                 timeout=5
             )

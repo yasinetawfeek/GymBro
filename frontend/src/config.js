@@ -8,4 +8,10 @@ export const API_URL =
   import.meta.env.VITE_API_URL || 
   'http://localhost:8000';
 
+// AI service URL for WebSocket connection
+export const AI_URL =
+  (window._env_ && window._env_.VITE_AI_URL) ||
+  import.meta.env.VITE_AI_URL ||
+  'http://localhost:8001';
+
 // Other configuration variables can be added here 

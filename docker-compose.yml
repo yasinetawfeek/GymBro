@@ -20,6 +20,9 @@ services:
     depends_on:
       - backend
       - ai
+    environment:
+      - VITE_API_URL=http://backend:8000
+      - VITE_AI_URL=http://ai:8001
     restart: unless-stopped
 
   ai:
@@ -31,6 +34,7 @@ services:
       - backend
     environment:
       - FLASK_ENV=development
+      - BACKEND_URL=http://backend:8000
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
