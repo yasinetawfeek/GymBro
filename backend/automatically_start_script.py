@@ -85,17 +85,17 @@ customer_group, created = Group.objects.get_or_create(name='Customer')
 
 list_users = [
 
-    {'username': 'Rob', 'password': 'Rob', 'email':'rob.smith@example.com', 'group': customer_group ,'surname':'smith', 'forename':'Rob', 'title':'Mr'},
-    {'username': 'Liz', 'password': 'Liz', 'email':'liz.brown@example.com', 'group': customer_group ,'surname':'brown' , 'forename':'Liz', 'title':'Ms' },
-    {'username': 'Hesitant', 'password': 'Hesitant', 'email':'hesitant@example.com', 'group': customer_group ,'surname':'hesitant' , 'forename':'Reven', 'title':'Mr'},
+    {'username': 'Rob', 'password': 'Rob', 'email':'rob.smith@example.com', 'group': customer_group ,'surname':'Smith', 'forename':'Rob', 'title':'Mr'},
+    {'username': 'Liz', 'password': 'Liz', 'email':'liz.brown@example.com', 'group': customer_group ,'surname':'Brown' , 'forename':'Liz', 'title':'Ms' },
+    {'username': 'Hesitant', 'password': 'Hesitant', 'email':'hesitant@example.com', 'group': customer_group ,'surname':'Hesitant' , 'forename':'Reven', 'title':'Mr'},
     # {'username': 'Edmond', 'password': 'Edmond', 'email':'edmond.hobbs@darknet.com', 'group': customer_group ,'surname':'hobbs', 'forename':'Edmond', 'title':'Mr'},
-    {'username': 'Ahmed', 'password': 'Ahmed', 'email':'Ahmed.moh@example.com', 'group': customer_group ,'surname':'mohamed', 'forename':'Ahmed', 'title':'Mr'},
-    {'username': 'Mike', 'password': 'Mike', 'email':'Mike.meh@example.com', 'group': customer_group ,'surname':'mehanheh', 'forename':'Mike', 'title':'Mr'},
-    {'username': 'Nathan', 'password': 'Nathan', 'email':'Nathan.hob@example.com', 'group': customer_group ,'surname':'hobb', 'forename':'Nathan', 'title':'Mr'},
-    {'username': 'Omar', 'password': 'Omar', 'email':'Omar.ahmed@example.com', 'group': customer_group ,'surname':'ahmed', 'forename':'Omar', 'title':'Mr'},
-    {'username': 'Mark', 'password': 'Mark', 'email':'Mark.shon@example.com', 'group': customer_group ,'surname':'shon', 'forename':'Mark', 'title':'Mr'},
-    {'username': 'John', 'password': 'John', 'email':'John.sehn@example.com', 'group': customer_group ,'surname':'sehn', 'forename':'John', 'title':'Mr'},
-    {'username': 'Paul', 'password': 'Paul', 'email':'Paul.mark@example.com', 'group': customer_group ,'surname':'mark', 'forename':'Paul', 'title':'Mr'},
+    {'username': 'Ahmed', 'password': 'Ahmed', 'email':'Ahmed.moh@example.com', 'group': customer_group ,'surname':'Mohamed', 'forename':'Ahmed', 'title':'Mr'},
+    {'username': 'Mike', 'password': 'Mike', 'email':'Mike.meh@example.com', 'group': customer_group ,'surname':'Mehanheh', 'forename':'Mike', 'title':'Mr'},
+    {'username': 'Nathan', 'password': 'Nathan', 'email':'Nathan.hob@example.com', 'group': customer_group ,'surname':'Hobb', 'forename':'Nathan', 'title':'Mr'},
+    {'username': 'Omar', 'password': 'Omar', 'email':'Omar.ahmed@example.com', 'group': customer_group ,'surname':'Ahmed', 'forename':'Omar', 'title':'Mr'},
+    {'username': 'Mark', 'password': 'Mark', 'email':'Mark.shon@example.com', 'group': customer_group ,'surname':'Shon', 'forename':'Mark', 'title':'Mr'},
+    {'username': 'John', 'password': 'John', 'email':'John.sehn@example.com', 'group': customer_group ,'surname':'Sehn', 'forename':'John', 'title':'Mr'},
+    {'username': 'Paul', 'password': 'Paul', 'email':'Paul.mark@example.com', 'group': customer_group ,'surname':'Mark', 'forename':'Paul', 'title':'Mr'},
 
 
     {'username': 'First', 'password': 'First', 'email':'first.name@ufcfur_15_3.com', 'group': ai_engineer_group ,'surname':'Second', 'forename':'First', 'title':'Dr'},
