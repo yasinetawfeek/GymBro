@@ -160,9 +160,31 @@ const InvoiceDetailModal = ({ invoiceId, isDarkMode, onClose, onPaymentSuccess, 
       setError(null);
       
       try {
-        // Use the new invoice service for getting invoice details
-        const response = await invoiceService.getInvoiceDetails(invoiceId);
-        const invoiceData = response.data;
+        // First try to get invoice details from invoice endpoint
+        let invoiceData;
+        try {
+          const response = await invoiceService.getInvoiceDetails(invoiceId);
+          invoiceData = response.data;
+        } catch (err) {
+          // If invoice endpoint fails with 404, try billing endpoint as fallback
+          if (err.response && err.response.status === 404) {
+            console.log("Invoice not found, trying billing endpoint instead");
+            const billingResponse = await axios.get(`/api/billing/${invoiceId}/`, {
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem('access_token')}`
+              }
+            });
+            invoiceData = billingResponse.data;
+            
+            // Map billing record fields to invoice fields if needed
+            if (!invoiceData.subscription_type && invoiceData.subscription) {
+              invoiceData.subscription_type = invoiceData.subscription.plan;
+            }
+          } else {
+            // If it's not a 404 or the billing endpoint also fails, throw the error
+            throw err;
+          }
+        }
         
         // Ensure some properties exist
         if (!invoiceData.status) invoiceData.status = 'pending';
@@ -178,7 +200,7 @@ const InvoiceDetailModal = ({ invoiceId, isDarkMode, onClose, onPaymentSuccess, 
         setLoading(false);
       } catch (err) {
         console.error('Error fetching invoice:', err);
-        setError('Failed to load invoice details. Please try again.');
+        setError('Failed to load invoice details. Please try again later.');
         setLoading(false);
       }
     };

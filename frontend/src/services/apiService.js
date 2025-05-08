@@ -52,6 +52,7 @@ const invoiceService = {
     return apiClient.get('api/invoices/my_invoices/');
   },
   getInvoiceDetails: async (invoiceId) => {
+    // Use apiClient directly with proper error handling in the component
     return apiClient.get(`api/invoices/${invoiceId}/`);
   },
   payInvoice: async (invoiceId) => {

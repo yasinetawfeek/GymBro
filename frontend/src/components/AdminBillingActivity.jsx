@@ -189,8 +189,11 @@ const AdminBillingActivity = ({ isDarkMode }) => {
   };
 
   // Handle opening the invoice modal
-  const handleOpenInvoiceModal = (invoiceId) => {
-    setSelectedInvoiceId(invoiceId);
+  const handleOpenInvoiceModal = (record) => {
+    // Determine if this is a billing record or invoice by checking for fields
+    // specific to each type
+    const recordType = record.invoice_date ? 'invoice' : 'billing';
+    setSelectedInvoiceId(record.id);
     setIsInvoiceModalOpen(true);
   };
   
@@ -331,7 +334,7 @@ const AdminBillingActivity = ({ isDarkMode }) => {
             
             <div className="col-span-1 flex justify-end">
               <button 
-                onClick={() => handleOpenInvoiceModal(record.id)}
+                onClick={() => handleOpenInvoiceModal(record)}
                 className={`p-1 rounded-lg ${
                   isDarkMode 
                     ? 'hover:bg-gray-700 text-gray-400 hover:text-white' 
