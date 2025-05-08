@@ -166,7 +166,7 @@ performance_metrics = {}
 model_version = "1.0.0"  # Update this when you deploy new models
 
 # Initialize API endpoint URLs
-BACKEND_BASE_URL = os.environ.get('BACKEND_URL', 'http://localhost:8000')
+BACKEND_BASE_URL = 'http://localhost:8000'
 USAGE_ENDPOINT = f"{BACKEND_BASE_URL}/api/usage/"
 PERFORMANCE_ENDPOINT = f"{BACKEND_BASE_URL}/api/model-performance/"
 

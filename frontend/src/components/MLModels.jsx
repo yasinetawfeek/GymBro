@@ -5,6 +5,7 @@ import {
   Save, RefreshCw, AlertCircle, Heart, Dumbbell, Activity
 } from 'lucide-react';
 import axios from 'axios';
+import { API_URL } from '../config';
 
 const MLModels = ({ isDarkMode }) => {
   // State for models and UI
@@ -85,7 +86,7 @@ const MLModels = ({ isDarkMode }) => {
     
     try {
       const token = localStorage.getItem('access_token');
-      const response = await axios.get('http://localhost:8000/api/ml-models/', {
+      const response = await axios.get(`${API_URL}/api/ml-models/`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -154,7 +155,7 @@ const MLModels = ({ isDarkMode }) => {
         // If updating hyperparameters specifically
         if (editedModel.id) {
           await axios.post(
-            `http://localhost:8000/api/ml-models/${editedModel.id}/update_hyperparameters/`, 
+            `${API_URL}/api/ml-models/${editedModel.id}/update_hyperparameters/`, 
             {
               learning_rate: editedModel.hyperparameters.learningRate,
               epochs: editedModel.hyperparameters.epochs,
@@ -167,7 +168,7 @@ const MLModels = ({ isDarkMode }) => {
           
           // Also update general model properties
           await axios.patch(
-            `http://localhost:8000/api/ml-models/${editedModel.id}/`, 
+            `${API_URL}/api/ml-models/${editedModel.id}/`, 
             {
               name: editedModel.name
             },
@@ -181,7 +182,7 @@ const MLModels = ({ isDarkMode }) => {
         } else {
           // Create new model
           await axios.post(
-            'http://localhost:8000/api/ml-models/', 
+            `${API_URL}/api/ml-models/`, 
             {
               name: editedModel.name,
               model_type: editedModel.type,
@@ -222,7 +223,7 @@ const MLModels = ({ isDarkMode }) => {
       try {
         const token = localStorage.getItem('access_token');
         await axios.post(
-          `http://localhost:8000/api/ml-models/${modelId}/deploy/`, 
+          `${API_URL}/api/ml-models/${modelId}/deploy/`, 
           {},
           {
             headers: { Authorization: `Bearer ${token}` }
@@ -269,7 +270,7 @@ const MLModels = ({ isDarkMode }) => {
         try {
           const token = localStorage.getItem('access_token');
           await axios.delete(
-            `http://localhost:8000/api/ml-models/${modelId}/`, 
+            `${API_URL}/api/ml-models/${modelId}/`, 
             {
               headers: { Authorization: `Bearer ${token}` }
             }

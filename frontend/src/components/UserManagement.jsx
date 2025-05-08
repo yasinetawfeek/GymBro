@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import userService from '../services/userService';
+import { API_URL } from '../config';
 
 // Animation variants for table rows
 const tableRowVariant = {
@@ -57,7 +58,7 @@ const UserManagement = ({ isDarkMode = true, onSelectUser }) => {
             try {
               // Get specific user role info to check approval status
               const token = localStorage.getItem('access_token');
-              const roleResponse = await axios.get(`http://localhost:8000/api/role_info/${user.id}/user_approval_status/`, {
+              const roleResponse = await axios.get(`${API_URL}/api/role_info/${user.id}/user_approval_status/`, {
                 headers: { Authorization: `Bearer ${token}` }
               });
               isApproved = roleResponse.data.is_approved;
@@ -124,7 +125,7 @@ const UserManagement = ({ isDarkMode = true, onSelectUser }) => {
       const action = isApproved ? 'approved' : 'rejected';
       
       const token = localStorage.getItem('access_token');
-      await axios.post(`http://localhost:8000/api/approvals/${userId}/${endpoint}/`, {}, {
+      await axios.post(`${API_URL}/api/approvals/${userId}/${endpoint}/`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       

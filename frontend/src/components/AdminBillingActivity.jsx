@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
+import { API_URL } from '../config';
 import { 
   AlertCircle, RefreshCw, Calendar, DollarSign, 
   Filter, Download, FileText, Search, X, 
@@ -84,7 +85,7 @@ const AdminBillingActivity = ({ isDarkMode }) => {
       
       // Call the billable_activity endpoint
       const response = await axios.get(
-        `http://localhost:8000/api/billing/billable_activity/?${queryString}`, 
+        `${API_URL}/api/billing/billable_activity/?${queryString}`, 
         { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }}
       );
       
