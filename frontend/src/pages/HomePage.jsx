@@ -63,23 +63,28 @@ const LastViewedExercise = ({ isDarkMode }) => {
   useEffect(() => {
     // Only fetch data if user is logged in
     if (user) {
+      console.log('[HomePage] LastViewedExercise - Fetching data for user:', user.username);
       setLoading(true);
       lastViewedExerciseService.getLastViewed()
         .then(response => {
+          console.log('[HomePage] LastViewedExercise - Data received:', response.data);
           setLastViewed(response.data);
           setLoading(false);
         })
         .catch(error => {
-          console.error('Error fetching last viewed exercise:', error);
+          console.error('[HomePage] Error fetching last viewed exercise:', error);
           setLoading(false);
         });
     }
   }, [user]);
 
   // If user is not logged in or there's no last viewed exercise
-  if (!user || (lastViewed && !lastViewed.workout_type)) {
+  if (!user || !lastViewed) {
+    console.log('[HomePage] LastViewedExercise - Not rendering because:', !user ? 'No user logged in' : 'No last viewed data');
     return null;
   }
+  
+  console.log('[HomePage] LastViewedExercise - About to render with data:', lastViewed);
   
   // Helper function to get proper workout name
   const getWorkoutName = (workout) => {
@@ -708,6 +713,7 @@ const FloatingDumbbellButton = ({ isDarkMode, navigate }) => {
 const HomePage = () => {
   const navigate = useNavigate();
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const { user } = useAuth();
   
   // Check system preference on initial load
   useEffect(() => {
@@ -741,6 +747,7 @@ const HomePage = () => {
       <NavBar isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />
       <main>
         <Hero isDarkMode={isDarkMode} navigate={navigate}/>
+        {user && <LastViewedExercise isDarkMode={isDarkMode} />}
         <HowItWorks isDarkMode={isDarkMode}/>
         <Features isDarkMode={isDarkMode}/>
         <Testimonials isDarkMode={isDarkMode}/>
