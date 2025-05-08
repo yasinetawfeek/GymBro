@@ -34,10 +34,20 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
+# Add environment variable substitution script
+RUN echo '#!/bin/sh' > /usr/local/bin/env-replace.sh && \
+    echo 'envsubst < /usr/share/nginx/html/assets/env-config.template.js > /usr/share/nginx/html/assets/env-config.js' >> /usr/local/bin/env-replace.sh && \
+    chmod +x /usr/local/bin/env-replace.sh
+
+# Create the env-config.template.js file
+RUN mkdir -p /usr/share/nginx/html/assets && \
+    echo "window._env_ = { VITE_API_URL: '${VITE_API_URL:-http://localhost:8000}', VITE_AI_URL: '${VITE_AI_URL:-http://localhost:8001}' };" > /usr/share/nginx/html/assets/env-config.template.js
+
 # Create startup script
 RUN echo '#!/bin/sh' > /docker-entrypoint.sh && \
     echo 'wait-for-it backend:8000 -t 60' >> /docker-entrypoint.sh && \
     echo 'wait-for-it ai:8001 -t 60' >> /docker-entrypoint.sh && \
+    echo '/usr/local/bin/env-replace.sh' >> /docker-entrypoint.sh && \
     echo 'exec nginx -g "daemon off;"' >> /docker-entrypoint.sh && \
     chmod +x /docker-entrypoint.sh
 

@@ -13,6 +13,7 @@ import {
   Area, AreaChart
 } from 'recharts';
 import { useAuth } from '../context/AuthContext';
+import { API_URL } from '../config';
 
 // Animation variants
 const fadeIn = {
@@ -146,11 +147,9 @@ const ModelPerformance = ({ isDarkMode }) => {
         params.workout_type = workoutType;
       }
       
-      const response = await axios.get('http://localhost:8000/api/model-performance/summary/', {
+      const response = await axios.get(`${API_URL}/api/model-performance/summary/`, {
         params,
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { Authorization: `Bearer ${token}` }
       });
       
       console.log('ModelPerformance API response:', response.data);

@@ -25,6 +25,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import userService from '../services/userService';
+import { API_URL } from '../config';
 
 // Animation variants
 const pageTransition = {
@@ -88,7 +89,7 @@ const AccountManagement = () => {
       if (auth.token) {
         try {
           setLoading(true);
-          const response = await axios.get('http://localhost:8000/api/role_info/', {
+          const response = await axios.get(`${API_URL}/api/role_info/`, {
             headers: { Authorization: `Bearer ${auth.token}` }
           });
           
@@ -305,13 +306,12 @@ const AccountManagement = () => {
 
   // Define the missing updateProfile function
   const updateProfile = async (updatedData) => {
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/';
     try {
       // Log the data being sent to the API for debugging
       console.log('Sending profile update:', updatedData);
       
       const response = await axios.patch(
-        `${API_URL}api/my_account/`, 
+        `${API_URL}/api/my_account/`, 
         updatedData,
         {
           headers: { 
@@ -461,7 +461,7 @@ const AccountManagement = () => {
       const action = isApproved ? 'approved' : 'rejected';
       
       const token = localStorage.getItem('access_token');
-      await axios.post(`http://localhost:8000/api/approvals/${userId}/${endpoint}/`, {}, {
+      await axios.post(`${API_URL}/api/approvals/${userId}/${endpoint}/`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       

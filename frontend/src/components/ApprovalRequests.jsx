@@ -5,6 +5,7 @@ import {
   CheckCircle, XCircle, User, Mail, Calendar,
   Shield, UserCheck, AlertCircle, RefreshCw
 } from 'lucide-react';
+import { API_URL } from '../config';
 
 const ApprovalRequests = ({ isDarkMode }) => {
   const [pendingUsers, setPendingUsers] = useState([]);
@@ -30,7 +31,7 @@ const ApprovalRequests = ({ isDarkMode }) => {
       setError(null);
       
       const token = localStorage.getItem('access_token');
-      const response = await axios.get('http://localhost:8000/api/approvals/pending/', {
+      const response = await axios.get(`${API_URL}/api/approvals/pending/`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -58,7 +59,7 @@ const ApprovalRequests = ({ isDarkMode }) => {
       setProcessingUser(userId);
       
       const token = localStorage.getItem('access_token');
-      await axios.post(`http://localhost:8000/api/approvals/${userId}/approve/`, {}, {
+      await axios.post(`${API_URL}/api/approvals/${userId}/approve/`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -77,7 +78,7 @@ const ApprovalRequests = ({ isDarkMode }) => {
       setProcessingUser(userId);
       
       const token = localStorage.getItem('access_token');
-      await axios.post(`http://localhost:8000/api/approvals/${userId}/reject/`, {}, {
+      await axios.post(`${API_URL}/api/approvals/${userId}/reject/`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       

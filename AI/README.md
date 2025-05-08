@@ -65,4 +65,39 @@ The project is supported by three key Jupyter notebooks that document the machin
 
 3. **app/workout_classifer_final.ipynb**: This notebook implements a Long Short-Term Memory (LSTM) neural network that classifies entire workout sequences. It processes time-series pose data to identify which exercise is being performed, achieving high accuracy even with limited training data.
 
-These notebooks provide detailed documentation of the AI development process and can be referenced to understand the technical implementation behind the application. 
+These notebooks provide detailed documentation of the AI development process and can be referenced to understand the technical implementation behind the application.
+
+# AI Module
+
+## Environment Variables
+
+The AI service uses the following environment variables:
+
+- `BACKEND_URL`: The URL of the backend API (default: http://localhost:8000)
+
+## Running Locally
+
+To run the AI service locally:
+
+1. Create a `.env` file in the AI directory with the required environment variables:
+   ```
+   BACKEND_URL=http://localhost:8000
+   ```
+
+2. Install the requirements:
+   ```
+   pip install -r requirements.txt
+   ```
+
+3. Run the server:
+   ```
+   python app/main.py
+   ```
+
+## Running with Docker
+
+When running with Docker, the environment variables are set in the Dockerfile, but can be overridden when starting the container:
+
+```
+docker run -p 8001:8001 -e BACKEND_URL=http://your-backend-url:8000 desd-ai-service
+``` 

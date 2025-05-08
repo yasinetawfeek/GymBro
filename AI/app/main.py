@@ -430,7 +430,7 @@ def report_performance_metrics(client_id, is_final=False):
             # First check if the user has admin or ML expert role before trying to send metrics
             # This avoids users getting 403 errors which could affect their experience
             role_check_response = requests.get(
-                "http://localhost:8000/api/role-info/",
+                f"{BACKEND_BASE_URL}/api/role-info/",
                 headers={"Authorization": f"Bearer {token}"},
                 timeout=5
             )

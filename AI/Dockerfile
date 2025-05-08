@@ -4,6 +4,7 @@ FROM python:3.10-slim
 # Environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV BACKEND_URL=http://backend:8000
 
 # Set working directory
 WORKDIR /app
