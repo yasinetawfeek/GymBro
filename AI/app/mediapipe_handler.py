@@ -13,11 +13,11 @@ from mpl_toolkits.mplot3d import Axes3D
 import os
 import random as rand
 
+current_dir = os.path.dirname(os.path.realpath(__file__))
+
 class MediaPipeHandler():
-    def __init__(self):
-        print("current OS working directory is",os.getcwd())
-        self.model_path = "H:\\DesD_AI_pathway\\AI\\app\\pose_landmarker_full.task" 
-        # self.model_path=os.path.join("app", "pose_landmarker_full.task")
+    def __init__(self):        
+        self.model_path=os.path.join(current_dir, "pose_landmarker_full.task")
 
         base_options = python.BaseOptions(model_asset_path=self.model_path)
         self.options = vision.PoseLandmarkerOptions(

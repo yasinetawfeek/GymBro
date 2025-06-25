@@ -10,6 +10,8 @@ from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
 import os
 
+current_dir = os.path.dirname(os.path.realpath(__file__))
+
 # Configure GPU
 print("GPU setup:")
 gpus = tf.config.list_physical_devices('GPU')
@@ -31,8 +33,8 @@ tf.random.set_seed(42)
 np.random.seed(42)
 
 # Load the datasets
-train_df = pd.read_csv('data/train_new.csv')
-test_df = pd.read_csv('data/test_new.csv')
+train_df = pd.read_csv(current_dir + '/../data/train_new.csv')
+test_df = pd.read_csv(current_dir + '/../data/test_new.csv')
 
 # Combine datasets for better data utilization and cross-validation
 all_data = pd.concat([train_df, test_df], ignore_index=True)

@@ -108,7 +108,7 @@ except NameError:
 
 
 data_dir = os.path.join(base_dir, "data")
-models_dir = os.path.join(data_dir, "models")
+models_dir = os.path.join(base_dir, "models")
 
 # Create models directory if it doesn't exist
 os.makedirs(models_dir, exist_ok=True)
@@ -119,9 +119,9 @@ print(f"Data directory: {data_dir}")
 print(f"Models directory: {models_dir}")
 
 # --- Load and Prepare Data ---
-train_csv_path = os.path.join(data_dir, "train_new.csv")
-test_csv_path = os.path.join(data_dir, "test_new.csv")
-val_csv_path = os.path.join(data_dir, "validation_new.csv")
+train_csv_path = os.path.join(data_dir, "train.csv")
+test_csv_path = os.path.join(data_dir, "test.csv")
+val_csv_path = os.path.join(data_dir, "validation.csv")
 
 if not all(os.path.exists(p) for p in [train_csv_path, test_csv_path, val_csv_path]):
      print("Error: One or more CSV files not found. Please check paths:")
@@ -167,7 +167,7 @@ plt.title('Original Training Dataset WorkoutLabel Distribution (Percentage)')
 plt.ylabel('Percentage')
 plt.xticks(rotation=45, ha='right') # Rotate labels for better readability
 plt.tight_layout()
-plt.show()
+# plt.show()
 
 # --- Preprocessing ---
 # List of body keypoint features to preprocess
@@ -358,7 +358,7 @@ try:
     plt.ylabel('Percentage')
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
-    plt.show()
+    # plt.show()
 
 except ValueError as e:
      print(f"Error during SMOTE: {e}")
@@ -377,7 +377,7 @@ X_test_scaled = scaler.transform(X_test)
 print("Features scaled.")
 
 # Save the scaler
-scaler_path = os.path.join(models_dir, "feature_scaler.pkl")
+scaler_path = os.path.join(models_dir, "workout_classifiers/feature_scaler.pkl")
 with open(scaler_path, 'wb') as f:
     pickle.dump(scaler, f)
 print(f"Scaler saved to {scaler_path}")
@@ -400,7 +400,7 @@ print(f"Encoded classes: {label_encoder.classes_}") # These are the integer repr
 print(f"Original class names: {label_encoder.inverse_transform(label_encoder.classes_)}") # Map back to names
 
 # Save the label encoder
-encoder_path = os.path.join(models_dir, "label_encoder.pkl")
+encoder_path = os.path.join(data_dir, "label_encoder.pkl")
 with open(encoder_path, 'wb') as f:
     pickle.dump(label_encoder, f)
 print(f"Label encoder saved to {encoder_path}")
@@ -543,8 +543,8 @@ test_dataset = WorkoutSequenceDataset(X_test_seq, y_test_seq, add_noise=False) #
 
 # Create dataloaders
 batch_size = 64 # Can potentially increase batch size depending on GPU memory
-# Use num_workers > 0 only if not on Windows or if using appropriate multiprocessing start method
-num_workers = min(4, os.cpu_count()) if os.name != 'nt' else 0
+# Force single-threaded to avoid multiprocessing issues in scripts
+num_workers = 0  # Force single-threaded to avoid pickling issues
 print(f"Using num_workers={num_workers} for DataLoaders.")
 
 # Handle empty datasets in DataLoader creation
@@ -825,7 +825,7 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler
         plt.grid(True)
 
         plt.tight_layout()
-        plt.show()
+        # plt.show()
 
         # Plot accuracy gap
         plt.figure(figsize=(8, 4))
@@ -838,7 +838,7 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
-        plt.show()
+        # plt.show()
     else:
         print("Skipping plotting curves as training/validation data was insufficient.")
 
@@ -884,41 +884,6 @@ def validate_data_separation(train_loader, val_loader):
     except Exception as e:
          print(f"  Error during validation check: {e}")
          return True # Allow proceeding but with caution
-
-
-# Validate before training and ensure loaders exist
-if train_loader and val_loader and validate_data_separation(train_loader, val_loader):
-    # Train the model
-    model = train_model(model, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs=50, patience=10) # Increased epochs/patience
-
-    # Save the final (potentially best) model
-    model_path = os.path.join(models_dir, "lstm_workout_classifier_sequential_v2.pth")
-    # Ensure label_encoder is fitted before accessing classes_
-    if hasattr(label_encoder, 'classes_'):
-        label_classes_list = label_encoder.classes_.tolist()
-    else:
-        print("Warning: Label encoder not fitted, cannot save class names.")
-        label_classes_list = []
-
-    torch.save({
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'input_size': input_size,
-        'hidden_size': hidden_size,
-        'num_layers': num_layers,
-        'num_classes': num_classes,
-        'dropout_rate': dropout_rate,
-        'sequence_length': SEQUENCE_LENGTH,
-        'scaler_path': scaler_path, # Store path to scaler
-        'encoder_path': encoder_path, # Store path to encoder
-        'label_classes': label_classes_list # Store class names
-    }, model_path)
-    print(f"\nModel saved to {model_path}")
-
-elif not train_loader or not val_loader:
-     print("\nTraining aborted: Training or Validation DataLoader could not be created (likely due to empty datasets after sequencing).")
-else: # leakage detected
-    print("\nTraining aborted due to potential data leakage detected by validation check.")
 
 
 # --- Evaluation ---
@@ -1005,49 +970,85 @@ def evaluate_model(model, data_loader, label_encoder, criterion, device):
 
     return eval_loss, accuracy, report, conf_matrix, cm_labels # Return matrix labels
 
-# Evaluate on test set (only if test_loader exists)
-if test_loader:
-    print("\n===== Evaluating on Test Set =====")
-    test_loss, test_accuracy, test_report, test_conf_matrix, test_cm_labels = evaluate_model(
-        model, test_loader, label_encoder, criterion, device
-    )
-    print(f"Test Loss: {test_loss:.4f}")
-    print(f"Test Accuracy: {test_accuracy:.4f} ({test_accuracy*100:.2f}%)")
-    print("\nClassification Report (Test Data):")
-    print(test_report)
+# Validate before training and ensure loaders exist
+if __name__ == '__main__':
+    if train_loader and val_loader and validate_data_separation(train_loader, val_loader):
+        # Train the model
+        model = train_model(model, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs=50, patience=10) # Increased epochs/patience
 
-    # Plot confusion matrix for Test Data (only if matrix is not empty)
-    if test_conf_matrix.size > 0:
-        plt.figure(figsize=(12, 10))
-        sns.heatmap(test_conf_matrix, annot=True, fmt='d', cmap='Blues',
-                    xticklabels=test_cm_labels, # Use actual labels in matrix
-                    yticklabels=test_cm_labels)
-        plt.xlabel('Predicted Labels')
-        plt.ylabel('True Labels')
-        plt.title('Confusion Matrix on Test Data')
-        plt.xticks(rotation=45, ha='right')
-        plt.yticks(rotation=0)
-        plt.tight_layout()
-        plt.show()
+        # Save the final (potentially best) model
+        model_path = os.path.join(models_dir, "workout_classifiers/lstm_workout_classifier_sequential_v2.pth")
+        # Ensure label_encoder is fitted before accessing classes_
+        if hasattr(label_encoder, 'classes_'):
+            label_classes_list = label_encoder.classes_.tolist()
+        else:
+            print("Warning: Label encoder not fitted, cannot save class names.")
+            label_classes_list = []
+
+        torch.save({
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'input_size': input_size,
+            'hidden_size': hidden_size,
+            'num_layers': num_layers,
+            'num_classes': num_classes,
+            'dropout_rate': dropout_rate,
+            'sequence_length': SEQUENCE_LENGTH,
+            'scaler_path': scaler_path, # Store path to scaler
+            'encoder_path': encoder_path, # Store path to encoder
+            'label_classes': label_classes_list # Store class names
+        }, model_path)
+        print(f"\nModel saved to {model_path}")
+
+    elif not train_loader or not val_loader:
+         print("\nTraining aborted: Training or Validation DataLoader could not be created (likely due to empty datasets after sequencing).")
+    else: # leakage detected
+        print("\nTraining aborted due to potential data leakage detected by validation check.")
+
+
+    # Evaluate on test set (only if test_loader exists)
+    if test_loader:
+        print("\n===== Evaluating on Test Set =====")
+        test_loss, test_accuracy, test_report, test_conf_matrix, test_cm_labels = evaluate_model(
+            model, test_loader, label_encoder, criterion, device
+        )
+        print(f"Test Loss: {test_loss:.4f}")
+        print(f"Test Accuracy: {test_accuracy:.4f} ({test_accuracy*100:.2f}%)")
+        print("\nClassification Report (Test Data):")
+        print(test_report)
+
+        # Plot confusion matrix for Test Data (only if matrix is not empty)
+        if test_conf_matrix.size > 0:
+            plt.figure(figsize=(12, 10))
+            sns.heatmap(test_conf_matrix, annot=True, fmt='d', cmap='Blues',
+                        xticklabels=test_cm_labels, # Use actual labels in matrix
+                        yticklabels=test_cm_labels)
+            plt.xlabel('Predicted Labels')
+            plt.ylabel('True Labels')
+            plt.title('Confusion Matrix on Test Data')
+            plt.xticks(rotation=45, ha='right')
+            plt.yticks(rotation=0)
+            plt.tight_layout()
+            # plt.show()
+        else:
+            print("Skipping test confusion matrix plot (no data).")
     else:
-        print("Skipping test confusion matrix plot (no data).")
-else:
-    print("\nSkipping Test Set evaluation: Test DataLoader not available.")
+        print("\nSkipping Test Set evaluation: Test DataLoader not available.")
 
 
-# Evaluate on validation set (optional, only if val_loader exists)
-if val_loader:
-    print("\n===== Evaluating on Validation Set =====")
-    val_eval_loss, val_eval_accuracy, _, _, _ = evaluate_model( # Ignore report/matrix for brevity
-        model, val_loader, label_encoder, criterion, device
-    )
-    print(f"Validation Loss: {val_eval_loss:.4f}")
-    print(f"Validation Accuracy: {val_eval_accuracy:.4f} ({val_eval_accuracy*100:.2f}%)")
-else:
-     print("\nSkipping Validation Set evaluation: Validation DataLoader not available.")
+    # Evaluate on validation set (optional, only if val_loader exists)
+    if val_loader:
+        print("\n===== Evaluating on Validation Set =====")
+        val_eval_loss, val_eval_accuracy, _, _, _ = evaluate_model( # Ignore report/matrix for brevity
+            model, val_loader, label_encoder, criterion, device
+        )
+        print(f"Validation Loss: {val_eval_loss:.4f}")
+        print(f"Validation Accuracy: {val_eval_accuracy:.4f} ({val_eval_accuracy*100:.2f}%)")
+    else:
+         print("\nSkipping Validation Set evaluation: Validation DataLoader not available.")
 
 
-print("\n===== Model Training and Evaluation Complete =====")
+    print("\n===== Model Training and Evaluation Complete =====")
 
 # --- Prediction Function Example ---
 def predict_workout_sequence(model, scaler, label_encoder, input_data, sequence_length, device):

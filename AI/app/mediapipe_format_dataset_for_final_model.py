@@ -4,6 +4,8 @@ from datasets import load_dataset, Dataset
 from mediapipe_handler import MediaPipeHandler, add_new_label
 import os
 
+current_dir = os.path.dirname(os.path.realpath(__file__))
+
 def mediapipe_format_dataset_handler(dataset_name):
     try:
         ds = load_dataset(dataset_name)
@@ -59,9 +61,9 @@ def mediapipe_format_dataset_handler(dataset_name):
         validation_with_noise = validation_with_noise.sample(frac=1).reset_index(drop=True)
 
         print("saving...")
-        train_with_noise.to_csv('H:\\DesD_AI_pathway\\AI\\data\\train_new_final_model.csv')
-        test_with_noise.to_csv('H:\\DesD_AI_pathway\\AI\\data\\test_new_final_model.csv')
-        validation_with_noise.to_csv('H:\\DesD_AI_pathway\\AI\\data\\validation_new_final_model.csv')
+        train_with_noise.to_csv(current_dir + '/../data/train_with_displacement.csv')
+        test_with_noise.to_csv(current_dir + '/../data/test_with_displacement.csv')
+        validation_with_noise.to_csv(current_dir + '/../data/validation_with_displacement.csv')
 
     except Exception as e:
         print(f'Error processing dataset: {str(e)}')

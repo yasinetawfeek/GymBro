@@ -494,9 +494,9 @@ def load_pose_model():
     global pose_model
     try:
         # Define potential base directories relative to the script or common structures
-        possible_base_dirs = ['.', '..', '../..', 'AI']
+        possible_base_dirs = ['.', '..', '../..', 'AI', '../models']
         # Construct full search paths
-        search_paths = [os.path.join(base, 'data') for base in possible_base_dirs] + ['data', '/data'] # Add /data for container environments
+        search_paths = [os.path.join(base, 'pose_correctors') for base in possible_base_dirs] + ['data', '/data'] # Add /data for container environments
 
         model_path = find_file('best_model.pth', search_paths)
 
@@ -524,11 +524,10 @@ def load_workout_classifier():
     global workout_classifier, feature_scaler, label_encoder
     try:
         # Define potential base directories relative to the script or common structures
-        possible_base_dirs = ['.', '..', '../..', 'AI']
+        possible_base_dirs = ['.', '..', '../..', 'AI', '../models']
         # Construct full search paths
-        search_paths = [os.path.join(base, 'data', 'models') for base in possible_base_dirs] + \
-                       [os.path.join(base, 'data') for base in possible_base_dirs] + \
-                       ['data/models', 'data', '/data/models', '/data']  # Add /data for container environments
+        search_paths = [os.path.join(base, 'workout_classifiers') for base in possible_base_dirs] +\
+                       ['data/models', 'data', '/data/models', '/data', '../data']  # Add /data for container environments
 
         # 1. Find and load the LSTM model file - first check for the sequential version
         model_path = find_file('lstm_workout_classifier_sequential_v2.pth', search_paths)
@@ -633,10 +632,11 @@ def load_muscle_group_classifier():
     global muscle_group_classifier
     try:
         # Define potential base directories relative to the script or common structures
-        possible_base_dirs = ['.', '..', '../..', 'AI']
+        possible_base_dirs = ['.', '..', '../..', 'AI', '../models']
          # Construct full search paths, including a 'models' subdirectory as seen in training script
         search_paths = [os.path.join(base, 'data', 'models') for base in possible_base_dirs] + \
                        [os.path.join(base, 'data') for base in possible_base_dirs] + \
+                       [os.path.join(base, 'muscle_group_classifiers') for base in possible_base_dirs] +\
                        ['data/models', 'data', '/data/models', '/data'] # Add /data for container environments
 
         classifier_path = find_file('rfc_muscle_group_classifier.pkl', search_paths)

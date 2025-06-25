@@ -28,8 +28,8 @@ def train_workout_classifier():
     Assuming that dataset has been stored and is ready to be loaded
     """
     mediapipe_model = MediaPipeHandler()
-    training_dataset=mediapipe_model.read_csv_to_pd(os.path.join("data", "train_new.csv"))
-    testing_dataset=mediapipe_model.read_csv_to_pd(os.path.join("data", "test_new.csv"))
+    training_dataset=mediapipe_model.read_csv_to_pd(os.path.join("data", "train.csv"))
+    testing_dataset=mediapipe_model.read_csv_to_pd(os.path.join("data", "test.csv"))
     return train_workout_and_evaluate(training_dataset,testing_dataset)
 
 def train_muscle_group_classifier():
@@ -38,8 +38,8 @@ def train_muscle_group_classifier():
     """
     mediapipe_model = MediaPipeHandler()
 
-    training_dataset=mediapipe_model.read_csv_to_pd(os.path.join("data", "train_new.csv"))
-    testing_dataset=mediapipe_model.read_csv_to_pd(os.path.join("data", "test_new.csv"))
+    training_dataset=mediapipe_model.read_csv_to_pd(os.path.join("data", "train.csv"))
+    testing_dataset=mediapipe_model.read_csv_to_pd(os.path.join("data", "test.csv"))
     return train_muscle_group_and_evaluate(training_dataset,testing_dataset)
 
 def train_displacement_classifier():
@@ -48,8 +48,8 @@ def train_displacement_classifier():
     """
     mediapipe_model = MediaPipeHandler()
 
-    training_dataset=mediapipe_model.read_csv_to_pd("data\\train_new.csv")
-    testing_dataset=mediapipe_model.read_csv_to_pd("data\\test_new.csv")
+    training_dataset=mediapipe_model.read_csv_to_pd("data\\train.csv")
+    testing_dataset=mediapipe_model.read_csv_to_pd("data\\test.csv")
     # return train_displacement_and_evaluate(training_dataset,testing_dataset)
 
 def predict(x):
