@@ -1,0 +1,83 @@
+# Multi-stage Dockerfile for AI service
+FROM python:3.11-slim as base
+
+# Environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    BACKEND_URL=http://backend:8000
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3-opencv \
+        libgl1-mesa-glx \
+        libglib2.0-0 \
+        libsm6 \
+        libxext6 \
+        libxrender-dev \
+        libgomp1 \
+        curl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Download wait-for script
+RUN curl -o /usr/local/bin/wait-for https://raw.githubusercontent.com/eficode/wait-for/master/wait-for && \
+    chmod +x /usr/local/bin/wait-for
+
+# Development stage
+FROM base as development
+
+# Install PyTorch CPU version
+RUN pip install --no-cache-dir torch==2.1.0 --index-url https://download.pytorch.org/whl/cpu
+
+# Copy requirements and install dependencies
+COPY requirements.txt ./
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Expose port
+EXPOSE 8001
+
+# Start development server
+CMD ["python", "app/main.py"]
+
+# Production stage
+FROM base as production
+
+# Install PyTorch CPU version
+RUN pip install --no-cache-dir torch==2.1.0 --index-url https://download.pytorch.org/whl/cpu
+
+# Copy requirements and install production dependencies
+COPY requirements.txt ./
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# Create non-root user
+RUN groupadd -r ai && useradd -r -g ai ai
+
+# Copy application code
+COPY . .
+
+# Change ownership to ai user
+RUN chown -R ai:ai /app
+
+# Switch to non-root user
+USER ai
+
+# Expose port
+EXPOSE 8001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8001/health || exit 1
+
+# Start production server
+CMD ["python", "app/main_clean.py"]

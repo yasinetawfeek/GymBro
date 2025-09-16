@@ -29,4 +29,4 @@ COPY . .
 EXPOSE 8001
 
 # Start running the Flask application
-CMD ["python", "app/main.py"]
+CMD ["python", "app/main_clean.py"]

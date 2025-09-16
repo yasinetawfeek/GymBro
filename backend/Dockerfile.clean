@@ -1,0 +1,82 @@
+# Multi-stage Dockerfile for Django backend
+FROM python:3.11-slim as base
+
+# Environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        libpq-dev \
+        curl \
+        dos2unix && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Download wait-for script
+RUN curl -o /usr/local/bin/wait-for https://raw.githubusercontent.com/eficode/wait-for/master/wait-for && \
+    chmod +x /usr/local/bin/wait-for
+
+# Development stage
+FROM base as development
+
+# Copy requirements and install dependencies
+COPY requirements.txt ./
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Convert line endings and make scripts executable
+RUN dos2unix entrypoint.sh && \
+    chmod +x entrypoint.sh
+
+# Expose port
+EXPOSE 8000
+
+# Use development entrypoint
+ENTRYPOINT ["./entrypoint.sh"]
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+
+# Production stage
+FROM base as production
+
+# Copy requirements and install production dependencies
+COPY requirements.txt ./
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# Create non-root user
+RUN groupadd -r django && useradd -r -g django django
+
+# Copy application code
+COPY . .
+
+# Convert line endings and make scripts executable
+RUN dos2unix entrypoint.sh && \
+    chmod +x entrypoint.sh
+
+# Change ownership to django user
+RUN chown -R django:django /app
+
+# Switch to non-root user
+USER django
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health/ || exit 1
+
+# Use production entrypoint
+ENTRYPOINT ["./entrypoint.sh"]
+CMD ["gunicorn", "backend.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]

@@ -10,6 +10,102 @@ from django.core.exceptions import ValidationError
 
 User = get_user_model()
 
+# Simple serializers for the organized viewsets
+class UserSerializer(serializers.ModelSerializer):
+    """Simple user serializer for basic user operations."""
+    profile = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'is_staff', 'is_active', 'date_joined', 'profile']
+        read_only_fields = ['id', 'date_joined']
+    
+    def get_profile(self, obj):
+        """Get user profile data."""
+        try:
+            profile = obj.profile
+            return {
+                'is_approved': profile.is_approved,
+                'location': profile.location,
+                'phone_number': profile.phone_number,
+                'height': profile.height,
+                'weight': profile.weight,
+                'body_fat': profile.body_fat,
+                'fitness_level': profile.fitness_level,
+                'primary_goal': profile.primary_goal,
+                'workout_frequency': profile.workout_frequency,
+                'preferred_time': profile.preferred_time,
+                'focus_areas': profile.focus_areas,
+                'workouts_completed': profile.workouts_completed,
+                'days_streak': profile.days_streak,
+                'personal_bests': profile.personal_bests,
+                'points': profile.points,
+                'title': profile.title,
+                'forename': profile.forename,
+                'surname': profile.surname,
+            }
+        except:
+            return None
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    """Serializer for user profile operations."""
+    user = UserSerializer(read_only=True)
+    
+    class Meta:
+        model = UserProfile
+        fields = '__all__'
+        read_only_fields = ['user', 'created_at', 'updated_at']
+
+# Additional serializers for the organized viewsets
+class SubscriptionSerializer(serializers.ModelSerializer):
+    """Serializer for subscription operations."""
+    class Meta:
+        model = Subscription
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at']
+
+class InvoiceSerializer(serializers.ModelSerializer):
+    """Serializer for invoice operations."""
+    class Meta:
+        model = Invoice
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at']
+
+class BillingRecordSerializer(serializers.ModelSerializer):
+    """Serializer for billing record operations."""
+    class Meta:
+        model = BillingRecord
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at']
+
+class UsageRecordSerializer(serializers.ModelSerializer):
+    """Serializer for usage record operations."""
+    class Meta:
+        model = UsageRecord
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at']
+
+class ModelPerformanceMetricSerializer(serializers.ModelSerializer):
+    """Serializer for model performance metric operations."""
+    class Meta:
+        model = ModelPerformanceMetric
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at']
+
+class MLModelSerializer(serializers.ModelSerializer):
+    """Serializer for ML model operations."""
+    class Meta:
+        model = MLModel
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at']
+
+class UserLastViewedExerciseSerializer(serializers.ModelSerializer):
+    """Serializer for user last viewed exercise operations."""
+    class Meta:
+        model = UserLastViewedExercise
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at']
+
 # Company domain for employees
 COMPANY_DOMAIN = "ufcfur_15_3.com"
 

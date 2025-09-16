@@ -1,0 +1,205 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: gymbro-db
+    environment:
+      POSTGRES_USER: ${DB_USER:-gymbro}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-gymbro123}
+      POSTGRES_DB: ${DB_NAME:-gymbro_db}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-gymbro}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - gymbro-network
+
+  # Redis for caching and sessions
+  redis:
+    image: redis:7-alpine
+    container_name: gymbro-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - gymbro-network
+
+  # Django Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.clean
+      target: production
+    container_name: gymbro-backend
+    environment:
+      - DEBUG=False
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
+      - DATABASE_URL=postgresql://${DB_USER:-gymbro}:${DB_PASSWORD:-gymbro123}@db:5432/${DB_NAME:-gymbro_db}
+      - REDIS_URL=redis://redis:6379/0
+      - RESET_DB=${RESET_DB:-false}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/media:/app/media
+      - ./backend/static:/app/static
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - gymbro-network
+
+  # AI Service
+  ai:
+    build:
+      context: ./AI
+      dockerfile: Dockerfile.clean
+      target: production
+    container_name: gymbro-ai
+    environment:
+      - FLASK_ENV=production
+      - BACKEND_URL=http://backend:8000
+      - PYTHONPATH=/app
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./AI/models:/app/models:ro
+      - ./AI/data:/app/data:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - gymbro-network
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.clean
+      target: production
+    container_name: gymbro-frontend
+    environment:
+      - VITE_API_URL=http://backend:8000
+      - VITE_AI_URL=http://ai:8001
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+      ai:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - gymbro-network
+
+  # Development services (only for development)
+  backend-dev:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.clean
+      target: development
+    container_name: gymbro-backend-dev
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=dev-secret-key
+      - DATABASE_URL=postgresql://${DB_USER:-gymbro}:${DB_PASSWORD:-gymbro123}@db:5432/${DB_NAME:-gymbro_db}
+      - REDIS_URL=redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./backend/media:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles:
+      - development
+    networks:
+      - gymbro-network
+
+  frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.clean
+      target: development
+    container_name: gymbro-frontend-dev
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_AI_URL=http://localhost:8001
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    profiles:
+      - development
+    networks:
+      - gymbro-network
+
+  ai-dev:
+    build:
+      context: ./AI
+      dockerfile: Dockerfile.clean
+      target: development
+    container_name: gymbro-ai-dev
+    environment:
+      - FLASK_ENV=development
+      - BACKEND_URL=http://localhost:8000
+      - PYTHONPATH=/app
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./AI:/app
+    profiles:
+      - development
+    networks:
+      - gymbro-network
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+
+networks:
+  gymbro-network:
+    driver: bridge

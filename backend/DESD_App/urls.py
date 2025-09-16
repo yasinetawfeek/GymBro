@@ -20,7 +20,7 @@ router.register(r'last-viewed-exercise', UserLastViewedExerciseViewSet, basename
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('my_account/', UserViewSet.as_view(), name='my_account'),
+    path('my_account/', UserViewSet.as_view({'get': 'list', 'patch': 'update'}), name='my_account'),
     path('register/', RegisterView.as_view(), name='register'),
     path('train_model', TrainWorkoutClassiferViewSet.as_view({'post':'post'}),name='train_model'),
     path('predict_workout_classifer', PredictWorkoutClassiferViewSet.as_view({'post':'post'}),name='predict_workout_classifer'),

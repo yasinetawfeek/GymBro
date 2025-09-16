@@ -4,7 +4,7 @@
 
 echo "Waiting for PostgreSQL to start..."
 
-./Wait-for "$DB_HOST":"$DB_PORT"
+./Wait-for db:5432
 
 echo "Executing manage.py"
 
