@@ -781,6 +781,7 @@ const TrainingPage = () => {
   const autoUpdateTimerRef = useRef(null);
   const lastAutoUpdateTimeRef = useRef(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [screenSize, setScreenSize] = useState('desktop');
   
   // Add these new refs for tracking updates
   const pendingStatsRef = useRef({
@@ -1173,6 +1174,42 @@ const TrainingPage = () => {
     
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
+  // Add window resize listener to handle responsive changes
+  useEffect(() => {
+    const updateScreenSize = () => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      
+      // Determine screen size category
+      if (width < 640) {
+        setScreenSize('mobile');
+      } else if (width < 768) {
+        setScreenSize('sm');
+      } else if (width < 1024) {
+        setScreenSize('md');
+      } else if (width < 1280) {
+        setScreenSize('lg');
+      } else {
+        setScreenSize('xl');
+      }
+    };
+    
+    // Set initial screen size
+    updateScreenSize();
+    
+    const handleResize = () => {
+      updateScreenSize();
+    };
+    
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
     };
   }, []);
 
@@ -2190,7 +2227,13 @@ const TrainingPage = () => {
       </AnimatePresence>
       
       <motion.main 
-        className={`${isFullscreen ? 'h-screen' : 'container mx-auto px-4 py-4 sm:py-6 max-w-5xl'}`}
+        className={`${
+          isFullscreen 
+            ? 'h-screen' 
+            : screenSize === 'mobile' || screenSize === 'sm'
+              ? 'container mx-auto px-4 py-4 sm:py-6 max-w-5xl'
+              : 'w-full px-4 py-4 sm:py-6'
+        }`}
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.4, delay: 0.1 }}
@@ -2199,13 +2242,21 @@ const TrainingPage = () => {
           className={`${
             isFullscreen 
               ? 'fixed inset-0 bg-black m-0 p-0 max-w-none rounded-none' 
-              : 'mx-auto bg-black/20 dark:bg-gray-800/30 backdrop-blur-md rounded-2xl shadow-xl overflow-hidden border border-white/10'
+              : screenSize === 'mobile' || screenSize === 'sm'
+                ? 'mx-auto bg-black/20 dark:bg-gray-800/30 backdrop-blur-md rounded-2xl shadow-xl overflow-hidden border border-white/10'
+                : 'w-full bg-black/20 dark:bg-gray-800/30 backdrop-blur-md rounded-2xl shadow-xl overflow-hidden border border-white/10'
           }`}
           layout
           transition={{ duration: 0.4, type: 'spring', bounce: 0.2 }}
         >
           <div className={`relative ${
-            isFullscreen ? 'w-screen h-screen' : 'aspect-video'
+            isFullscreen 
+              ? 'w-screen h-screen' 
+              : screenSize === 'mobile' 
+                ? 'h-[calc(100vh-8rem)] w-full' 
+                : screenSize === 'sm' 
+                  ? 'h-[calc(100vh-10rem)] w-full' 
+                  : 'h-[calc(100vh-12rem)] w-full'
           }`}>
             <video
               ref={webcamRef}
