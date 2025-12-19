@@ -1,0 +1,131 @@
+// API Configuration
+export const API_URL = 'http://localhost:8000/api'; // Change this to your backend URL
+export const AI_URL = 'http://localhost:5000'; // Change this to your AI service URL
+
+// App Configuration
+export const APP_CONFIG = {
+  name: 'GymBro',
+  version: '1.0.0',
+  description: 'AI-Powered Fitness Tracking App',
+};
+
+// Feature Flags
+export const FEATURES = {
+  POSE_DETECTION: true,
+  WORKOUT_CLASSIFICATION: true,
+  MUSCLE_GROUP_DETECTION: true,
+  REAL_TIME_FEEDBACK: true,
+  WORKOUT_HISTORY: true,
+  PROGRESS_TRACKING: true,
+  PUSH_NOTIFICATIONS: true,
+};
+
+// Camera Configuration
+export const CAMERA_CONFIG = {
+  quality: 0.8,
+  aspect: [16, 9],
+  facing: 'front',
+  flashMode: 'off',
+  autoFocus: true,
+  whiteBalance: 'auto',
+  zoom: 0,
+};
+
+// Workout Types Mapping
+export const WORKOUT_MAP = {
+  0: "Barbell Bicep Curl",
+  1: "Bench Press",
+  2: "Chest Fly Machine",
+  3: "Deadlift",
+  4: "Decline Bench Press",
+  5: "Hammer Curl",
+  6: "Hip Thrust",
+  7: "Incline Bench Press",
+  8: "Lat Pulldown",
+  9: "Lateral Raises",
+  10: "Leg Extensions",
+  11: "Leg Raises",
+  12: "Plank",
+  13: "Pull Up",
+  14: "Push Ups",
+  15: "Romanian Deadlift",
+  16: "Russian Twist",
+  17: "Shoulder Press",
+  18: "Squat",
+  19: "T Bar Row",
+  20: "Tricep Dips",
+  21: "Tricep Pushdown"
+};
+
+// Muscle Group Mapping
+export const MUSCLE_GROUP_MAP = {
+  1: "Shoulders",
+  2: "Chest",
+  3: "Biceps",
+  4: "Core",
+  5: "Triceps",
+  6: "Legs",
+  7: "Back"
+};
+
+// Colors
+export const COLORS = {
+  primary: '#3b82f6',
+  secondary: '#f59e0b',
+  success: '#10b981',
+  warning: '#f59e0b',
+  error: '#ef4444',
+  info: '#3b82f6',
+  light: {
+    background: '#ffffff',
+    surface: '#f8fafc',
+    text: '#1e293b',
+    textSecondary: '#64748b',
+    border: '#e2e8f0',
+  },
+  dark: {
+    background: '#0f172a',
+    surface: '#1e293b',
+    text: '#f1f5f9',
+    textSecondary: '#94a3b8',
+    border: '#334155',
+  },
+};
+
+// Animation Configuration
+export const ANIMATION_CONFIG = {
+  duration: 300,
+  easing: 'ease-in-out',
+};
+
+// Storage Keys
+export const STORAGE_KEYS = {
+  AUTH_TOKEN: 'authToken',
+  USER_DATA: 'user',
+  THEME: 'theme',
+  WORKOUT_HISTORY: 'workoutHistory',
+  SETTINGS: 'settings',
+  LAST_WORKOUT: 'lastWorkout',
+};
+
+// Notification Configuration
+export const NOTIFICATION_CONFIG = {
+  workoutReminder: {
+    title: 'Time to Work Out! 💪',
+    body: 'Your body is ready for a great workout session.',
+    sound: 'default',
+    priority: 'high',
+  },
+  achievement: {
+    title: 'Achievement Unlocked! 🏆',
+    body: 'Great job! You\'ve reached a new milestone.',
+    sound: 'default',
+    priority: 'high',
+  },
+  formCorrection: {
+    title: 'Form Correction Needed',
+    body: 'Check your form to prevent injury and maximize results.',
+    sound: 'default',
+    priority: 'normal',
+  },
+}; 

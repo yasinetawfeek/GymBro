@@ -1,0 +1,57 @@
+{
+  "expo": {
+    "name": "GymBro",
+    "slug": "gymbro-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1a1a"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.gymbro.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera to analyze your workout form and provide real-time feedback.",
+        "NSMicrophoneUsageDescription": "This app uses the microphone for video recording during workouts.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to save workout videos and images."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a1a1a"
+      },
+      "package": "com.gymbro.app",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.VIBRATE",
+        "android.permission.WAKE_LOCK"
+      ],
+      "newArchEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-camera",
+      "expo-media-library",
+      "expo-notifications",
+      "expo-sensors",
+      "expo-av",
+      "expo-file-system",
+      "expo-image-picker"
+    ]
+  }
+} 
