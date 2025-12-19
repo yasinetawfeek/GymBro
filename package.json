@@ -1,5 +1,10 @@
 {
   "dependencies": {
+    "expo": "^54.0.2",
     "react-body-highlighter": "^2.0.5"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.2",
+    "@types/react": "~19.1.10"
   }
 }
